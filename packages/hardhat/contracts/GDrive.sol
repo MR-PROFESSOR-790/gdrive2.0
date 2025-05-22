@@ -218,87 +218,99 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Upload a new file to decentralized storage
+     * @param params Encoded parameters to reduce stack depth
      */
-    function uploadFile(
-        string calldata name,
-        string calldata fileType,
-        string calldata cid,
-        uint128 size,
-        string calldata description,
-        bool isEncrypted,
-        bool isPublic,
-        bytes32 folderId,
-        uint64 storagePeriod
-    ) external payable nonReentrant whenNotPaused returns (bytes32 fileId) {
-        return _uploadFileInternal(
-            name, fileType, cid, size, description, 
-            isEncrypted, isPublic, folderId, storagePeriod
-        );
-    }
-    
-    /**
-     * @dev Upload file with tags
-     */
-    function uploadFileWithTags(
-        string calldata name,
-        string calldata fileType,
-        string calldata cid,
-        uint128 size,
-        string calldata description,
-        bool isEncrypted,
-        bool isPublic,
-        string[] calldata tags,
-        bytes32 folderId,
-        uint64 storagePeriod
-    ) external payable nonReentrant whenNotPaused returns (bytes32) {
-        return _processFileUploadWithTags(
-            name, fileType, cid, size, description, 
-            isEncrypted, isPublic, tags, folderId, storagePeriod
-        );
-    }
-    
-    /**
-     * @dev Internal function to process file upload with tags
-     */
-    
-    
-    /**
-     * @dev Internal function to handle file upload
-     */
-    function _uploadFileInternal(
-        string calldata name,
-        string calldata fileType,
-        string calldata cid,
-        uint128 size,
-        string calldata description,
-        bool isEncrypted,
-        bool isPublic,
-        bytes32 folderId,
-        uint64 storagePeriod
-    ) internal returns (bytes32) {
-        // Phase 1: Validation and checks
-        _validateFileUploadInputs(cid, size, storagePeriod);
-        _validateSubscriptionAndLimits(size);
+    function uploadFile(bytes calldata params) 
+        external 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+        returns (bytes32 fileId) {
         
-        // Phase 2: Payment validation
+        // Decode parameters
+        (
+            string memory name,
+            string memory fileType,
+            string memory cid,
+            uint128 size,
+            string memory description,
+            bool isEncrypted,
+            bool isPublic,
+            string[] memory tags,
+            bytes32 folderId,
+            uint64 storagePeriod
+        ) = abi.decode(params, (string, string, string, uint128, string, bool, bool, string[], bytes32, uint64));
+        
+        // Validation
+        if (bytes(cid).length == 0) revert InvalidInput();
+        if (size == 0 || size > maxFileSize) revert FileSizeTooLarge();
+        if (storagePeriod < minimumStoragePeriod) revert InvalidInput();
+        
+        // Check subscription and limits
+        Subscription storage sub = subscriptions[msg.sender];
+        if (!sub.isActive || sub.expiryDate <= block.timestamp) {
+            revert InvalidSubscription();
+        }
+        if (userStorageUsed[msg.sender] + size > sub.storageLimit) {
+            revert StorageLimitExceeded();
+        }
+        
+        // Calculate and check payment
         uint256 storageCost = _calculateStorageCost(size, storagePeriod);
         if (msg.value < storageCost) revert InsufficientPayment();
         
-        // Phase 3: File creation
-        return _executeFileCreation(
-            name, fileType, cid, size, description,
-            isEncrypted, isPublic, folderId, storagePeriod
-        );
+        // Generate unique file ID (gas optimized)
+        unchecked {
+            ++_fileIdCounter;
+        }
+        fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
+        
+        // Create file record
+        files[fileId] = File({
+            cid: cid,
+            owner: msg.sender,
+            size: size,
+            uploadDate: uint64(block.timestamp),
+            downloadCount: 0,
+            version: 1,
+            isEncrypted: isEncrypted,
+            isPublic: isPublic
+        });
+        
+        // Store metadata separately
+        fileMetadata[fileId] = FileMetadata({
+            name: name,
+            fileType: fileType,
+            description: description,
+            tags: tags
+        });
+        
+        // Update user data
+        userFiles[msg.sender].push(fileId);
+        unchecked {
+            userStorageUsed[msg.sender] += size;
+        }
+        
+        // Add to folder if specified
+        if (folderId != bytes32(0)) {
+            folderFiles[folderId].push(fileId);
+        }
+        
+        // Update indexes (gas optimized)
+        _updateFileIndexes(fileId, fileType, tags, isPublic);
+        
+        // Handle payments
+        filePayments[fileId] = uint128(msg.value);
+        unchecked {
+            fileExpiryDates[fileId] = uint64(block.timestamp + storagePeriod);
+        }
+        
+        // Handle referral rewards
+        _handleReferralReward(uint128(msg.value));
+        
+        emit FileUploaded(fileId, msg.sender, cid);
+        return fileId;
     }
-    
-    /**
-     * @dev Validate file upload inputs
-     */
-    
-    
-    /**
-     * @dev Execute file creation and updates
-     */
     
     /**
      * @dev Create a new folder (gas optimized)
@@ -476,7 +488,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     // ============ VIEW FUNCTIONS (Gas Optimized) ============
     
     /**
-     * @dev Get file details with access control (split to avoid stack too deep)
+     * @dev Get file details with access control
      */
     function getFileDetails(bytes32 fileId) 
         external 
@@ -489,7 +501,12 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             string memory cid,
             uint128 size,
             uint64 uploadDate,
-            address owner
+            bool isEncrypted,
+            address owner,
+            string memory description,
+            uint64 expiryDate,
+            uint32 downloadCount,
+            uint16 version
         ) {
         File storage file = files[fileId];
         FileMetadata storage metadata = fileMetadata[fileId];
@@ -500,41 +517,17 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             file.cid,
             file.size,
             file.uploadDate,
-            file.owner
-        );
-    }
-    
-    /**
-     * @dev Get file extended details
-     */
-    function getFileExtendedDetails(bytes32 fileId) 
-        external 
-        view 
-        fileExists(fileId) 
-        hasFilePermission(fileId, Permission.READ) 
-        returns (
-            string memory description,
-            bool isEncrypted,
-            uint64 expiryDate,
-            uint32 downloadCount,
-            uint16 version,
-            string[] memory tags
-        ) {
-        File storage file = files[fileId];
-        FileMetadata storage metadata = fileMetadata[fileId];
-        
-        return (
-            metadata.description,
             file.isEncrypted,
+            file.owner,
+            metadata.description,
             fileExpiryDates[fileId],
             file.downloadCount,
-            file.version,
-            metadata.tags
+            file.version
         );
     }
     
     /**
-     * @dev Get user's storage statistics (optimized to avoid stack too deep)
+     * @dev Get user's storage statistics
      */
     function getUserStats(address user) external view returns (
         uint128 storageUsed,
@@ -542,7 +535,9 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         uint128 bandwidthUsed,
         uint128 bandwidthLimit,
         uint256 fileCount,
-        uint256 folderCount
+        uint256 folderCount,
+        uint8 subscriptionTier,
+        uint64 subscriptionExpiry
     ) {
         Subscription storage sub = subscriptions[user];
         return (
@@ -551,23 +546,9 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             userBandwidthUsed[user],
             sub.bandwidthLimit,
             userFiles[user].length,
-            userFolders[user].length
-        );
-    }
-    
-    /**
-     * @dev Get user's subscription details
-     */
-    function getUserSubscription(address user) external view returns (
-        uint8 subscriptionTier,
-        uint64 subscriptionExpiry,
-        bool isActive
-    ) {
-        Subscription storage sub = subscriptions[user];
-        return (
+            userFolders[user].length,
             sub.tier,
-            sub.expiryDate,
-            sub.isActive && sub.expiryDate > block.timestamp
+            sub.expiryDate
         );
     }
     
@@ -670,156 +651,14 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         lastBandwidthReset[user] = uint64(block.timestamp);
     }
     
-    // ============ INTERNAL HELPER FUNCTIONS (To avoid stack too deep) ============
-    
-    function _validateSubscriptionAndLimits(uint128 size) internal view {
-        Subscription storage sub = subscriptions[msg.sender];
-        if (!sub.isActive || sub.expiryDate <= block.timestamp) {
-            revert InvalidSubscription();
-        }
-        if (userStorageUsed[msg.sender] + size > sub.storageLimit) {
-            revert StorageLimitExceeded();
-        }
-    }
-    
-    function _validateFileUploadInputs(
-        string calldata cid,
-        uint128 size,
-        uint64 storagePeriod
-    ) internal view {
-        if (bytes(cid).length == 0) revert InvalidInput();
-        if (size == 0 || size > maxFileSize) revert FileSizeTooLarge();
-        if (storagePeriod < minimumStoragePeriod) revert InvalidInput();
-    }
-    
-    function _executeFileCreation(
-        string calldata name,
-        string calldata fileType,
-        string calldata cid,
-        uint128 size,
-        string calldata description,
-        bool isEncrypted,
-        bool isPublic,
-        bytes32 folderId,
-        uint64 storagePeriod
-    ) internal returns (bytes32 fileId) {
-        // Generate unique file ID
-        fileId = _generateFileId(cid);
-        
-        // Create file record and metadata
-        _createFileRecord(fileId, cid, size, isEncrypted, isPublic);
-        _storeFileMetadata(fileId, name, fileType, description);
-        
-        // Update user data and indexes
-        _updateUserDataAndFolder(fileId, size, folderId);
-        _updateBasicIndexes(fileId, fileType, isPublic);
-        
-        // Handle payments and rewards
-        _handleFilePayment(fileId, storagePeriod);
-        _handleReferralReward(uint128(msg.value));
-        
-        emit FileUploaded(fileId, msg.sender, cid);
-        return fileId;
-    }
-    
-    function _processFileUploadWithTags(
-        string calldata name,
-        string calldata fileType,
-        string calldata cid,
-        uint128 size,
-        string calldata description,
-        bool isEncrypted,
-        bool isPublic,
-        string[] calldata tags,
-        bytes32 folderId,
-        uint64 storagePeriod
-    ) internal returns (bytes32 fileId) {
-        // Process basic upload first
-        fileId = _uploadFileInternal(
-            name, fileType, cid, size, description, 
-            isEncrypted, isPublic, folderId, storagePeriod
-        );
-        
-        // Add tags after file creation
-        _addTagsToFile(fileId, tags);
-        return fileId;
-    }
-    
-    function _generateFileId(string calldata cid) internal returns (bytes32 fileId) {
-        unchecked {
-            ++_fileIdCounter;
-        }
-        fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
-        return fileId;
-    }
-    
-    function _createFileRecord(
-        bytes32 fileId,
-        string calldata cid,
-        uint128 size,
-        bool isEncrypted,
-        bool isPublic
-    ) internal {
-        files[fileId] = File({
-            cid: cid,
-            owner: msg.sender,
-            size: size,
-            uploadDate: uint64(block.timestamp),
-            downloadCount: 0,
-            version: 1,
-            isEncrypted: isEncrypted,
-            isPublic: isPublic
-        });
-    }
-    
-    function _storeFileMetadata(
-        bytes32 fileId,
-        string calldata name,
-        string calldata fileType,
-        string calldata description
-    ) internal {
-        string[] memory emptyTags = new string[](0);
-        fileMetadata[fileId] = FileMetadata({
-            name: name,
-            fileType: fileType,
-            description: description,
-            tags: emptyTags
-        });
-    }
-    
-    function _updateUserDataAndFolder(
-        bytes32 fileId,
-        uint128 size,
-        bytes32 folderId
-    ) internal {
-        userFiles[msg.sender].push(fileId);
-        unchecked {
-            userStorageUsed[msg.sender] += size;
-        }
-        
-        // Add to folder if specified
-        if (folderId != bytes32(0)) {
-            folderFiles[folderId].push(fileId);
-        }
-    }
-    
-    function _updateBasicIndexes(
-        bytes32 fileId,
-        string calldata fileType,
+    function _updateFileIndexes(
+        bytes32 fileId, 
+        string memory fileType, 
+        string[] memory tags, 
         bool isPublic
     ) internal {
         // Add to file type index
         fileTypeIndex[fileType].push(fileId);
-        
-        // Add to public files if public
-        if (isPublic) {
-            publicFiles.push(fileId);
-        }
-    }
-    
-    function _addTagsToFile(bytes32 fileId, string[] calldata tags) internal {
-        // Update file metadata with tags
-        fileMetadata[fileId].tags = tags;
         
         // Add to tag indexes
         uint256 tagLength = tags.length;
@@ -829,12 +668,10 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
                 ++i;
             }
         }
-    }
-    
-    function _handleFilePayment(bytes32 fileId, uint64 storagePeriod) internal {
-        filePayments[fileId] = uint128(msg.value);
-        unchecked {
-            fileExpiryDates[fileId] = uint64(block.timestamp + storagePeriod);
+        
+        // Add to public files if public
+        if (isPublic) {
+            publicFiles.push(fileId);
         }
     }
     

@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   31337: {
     GDrive: {
-      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       abi: [
         {
           inputs: [
@@ -748,33 +748,19 @@ const deployedContracts = {
               type: "uint64",
             },
             {
+              internalType: "bool",
+              name: "isEncrypted",
+              type: "bool",
+            },
+            {
               internalType: "address",
               name: "owner",
               type: "address",
             },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [
-            {
-              internalType: "bytes32",
-              name: "fileId",
-              type: "bytes32",
-            },
-          ],
-          name: "getFileExtendedDetails",
-          outputs: [
             {
               internalType: "string",
               name: "description",
               type: "string",
-            },
-            {
-              internalType: "bool",
-              name: "isEncrypted",
-              type: "bool",
             },
             {
               internalType: "uint64",
@@ -790,11 +776,6 @@ const deployedContracts = {
               internalType: "uint16",
               name: "version",
               type: "uint16",
-            },
-            {
-              internalType: "string[]",
-              name: "tags",
-              type: "string[]",
             },
           ],
           stateMutability: "view",
@@ -863,20 +844,6 @@ const deployedContracts = {
               name: "folderCount",
               type: "uint256",
             },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [
-            {
-              internalType: "address",
-              name: "user",
-              type: "address",
-            },
-          ],
-          name: "getUserSubscription",
-          outputs: [
             {
               internalType: "uint8",
               name: "subscriptionTier",
@@ -886,11 +853,6 @@ const deployedContracts = {
               internalType: "uint64",
               name: "subscriptionExpiry",
               type: "uint64",
-            },
-            {
-              internalType: "bool",
-              name: "isActive",
-              type: "bool",
             },
           ],
           stateMutability: "view",
@@ -1371,49 +1333,9 @@ const deployedContracts = {
         {
           inputs: [
             {
-              internalType: "string",
-              name: "name",
-              type: "string",
-            },
-            {
-              internalType: "string",
-              name: "fileType",
-              type: "string",
-            },
-            {
-              internalType: "string",
-              name: "cid",
-              type: "string",
-            },
-            {
-              internalType: "uint128",
-              name: "size",
-              type: "uint128",
-            },
-            {
-              internalType: "string",
-              name: "description",
-              type: "string",
-            },
-            {
-              internalType: "bool",
-              name: "isEncrypted",
-              type: "bool",
-            },
-            {
-              internalType: "bool",
-              name: "isPublic",
-              type: "bool",
-            },
-            {
-              internalType: "bytes32",
-              name: "folderId",
-              type: "bytes32",
-            },
-            {
-              internalType: "uint64",
-              name: "storagePeriod",
-              type: "uint64",
+              internalType: "bytes",
+              name: "params",
+              type: "bytes",
             },
           ],
           name: "uploadFile",
@@ -1421,70 +1343,6 @@ const deployedContracts = {
             {
               internalType: "bytes32",
               name: "fileId",
-              type: "bytes32",
-            },
-          ],
-          stateMutability: "payable",
-          type: "function",
-        },
-        {
-          inputs: [
-            {
-              internalType: "string",
-              name: "name",
-              type: "string",
-            },
-            {
-              internalType: "string",
-              name: "fileType",
-              type: "string",
-            },
-            {
-              internalType: "string",
-              name: "cid",
-              type: "string",
-            },
-            {
-              internalType: "uint128",
-              name: "size",
-              type: "uint128",
-            },
-            {
-              internalType: "string",
-              name: "description",
-              type: "string",
-            },
-            {
-              internalType: "bool",
-              name: "isEncrypted",
-              type: "bool",
-            },
-            {
-              internalType: "bool",
-              name: "isPublic",
-              type: "bool",
-            },
-            {
-              internalType: "string[]",
-              name: "tags",
-              type: "string[]",
-            },
-            {
-              internalType: "bytes32",
-              name: "folderId",
-              type: "bytes32",
-            },
-            {
-              internalType: "uint64",
-              name: "storagePeriod",
-              type: "uint64",
-            },
-          ],
-          name: "uploadFileWithTags",
-          outputs: [
-            {
-              internalType: "bytes32",
-              name: "",
               type: "bytes32",
             },
           ],
