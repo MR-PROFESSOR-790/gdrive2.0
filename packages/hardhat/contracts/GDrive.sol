@@ -492,7 +492,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     function deleteFile(bytes32 fileId) external onlyFileOwner(fileId) fileExists(fileId){
         File storage file = files[fileId];
         FileMetadata storage metadata = fileMetadata[fileId];
-        Subscription storage sub = subscriptions[msg.sender];
         _removeFromIndexes(fileId, metadata.fileType, metadata.tags, file.isPublic);
         if (userStorageUsed[msg.sender] >= file.size){
             userStorageUsed[msg.sender] -= file.size;
