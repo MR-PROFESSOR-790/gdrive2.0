@@ -26,6 +26,17 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         bool isPublic;             // Public accessibility (1 bit)
         // Total: 32 bytes slot boundary aligned
     }
+
+    struct PaidShareLink{
+        bytes32 fileId;
+        address creator;
+        uint128 pricePerAccess;
+        uint64 expiryDate;
+        uint32 accessCount;
+        uint32 maxAccess;
+        string password;
+        bool isActive;
+    }
     
     struct FileMetadata {
         string name;               // File name
@@ -134,6 +145,9 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     // Referral system
     mapping(address => address) public referrers;
     mapping(address => uint128) public referralRewards;
+
+    mapping(bytes32 => PaidShareLink) public PaidShareLinks;
+    mapping(address => uint128) public earnedRevenue;
     
     // Subscription tiers configuration (use arrays for gas efficiency)
     uint128[4] public tierStorageLimits;
@@ -150,6 +164,11 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     event FolderCreated(bytes32 indexed folderId, address indexed owner);
     event SubscriptionPurchased(address indexed user, uint8 tier, uint64 duration);
     event ReferralRewardPaid(address indexed referrer, uint128 amount);
+
+    event PaidShareLinkCreated(bytes32 indexed linkId, bytes32 indexed fileId, uint128 price);
+    event PaidAccessCompleted(bytes32 indexed linkId, address accessor, uint128 amount);
+    event RevenueWithdrawn(address indexed user, uint128 amount);
+
     
     // ============ MODIFIERS (Gas Optimized) ============
     
@@ -220,11 +239,8 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
      * @dev Upload a new file to decentralized storage
      * @param params Encoded parameters to reduce stack depth
      */
-    function uploadFile(bytes calldata params) 
-        external 
-        payable 
-        nonReentrant 
-        whenNotPaused 
+    function _uploadFile(bytes calldata params) 
+        internal 
         returns (bytes32 fileId) {
         
         // Decode parameters
@@ -311,7 +327,31 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         emit FileUploaded(fileId, msg.sender, cid);
         return fileId;
     }
-    
+
+    function uploadFile(bytes calldata params) 
+        external 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+        returns (bytes32 fileId) {
+        return _uploadFile(params);
+    }
+
+    function _batchUploadFiles(bytes[] calldata paramsArray) 
+        internal returns (bytes32[] memory fileIds) {
+        uint256 count = paramsArray.length;
+        fileIds = new bytes32[](count);
+        for (uint i = 0; i < count;) {
+            fileIds[i] = _uploadFile(paramsArray[i]);
+            unchecked { ++i; }
+        }
+    }
+
+    function batchUploadFiles(bytes[] calldata paramsArray) 
+        external payable nonReentrant whenNotPaused returns (bytes32[] memory fileIds) {
+        return _batchUploadFiles(paramsArray);
+    }
+
     /**
      * @dev Create a new folder (gas optimized)
      */
@@ -359,6 +399,196 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         emit FolderCreated(folderId, msg.sender);
         return folderId;
     }
+
+    function createPaidShareLink(
+        bytes32 fileId,
+        uint128 pricePerAccess,
+        uint64 expiryDate,
+        uint32 maxAccess,
+        string calldata password
+    ) external onlyFileOwner(fileId) fileExists(fileId) returns (bytes32 linkId) {
+        if (pricePerAccess == 0 || expiryDate <= block.timestamp) revert InvalidInput();
+
+        unchecked {++_shareLinkIdCounter;}
+        linkId = keccak256(abi.encodePacked(fileId, msg.sender, block.timestamp, _shareLinkIdCounter));
+
+        PaidShareLinks[linkId] = PaidShareLink({
+            fileId: fileId,
+            creator: msg.sender,
+            pricePerAccess: pricePerAccess,
+            expiryDate: expiryDate,
+            accessCount: 0,
+            maxAccess: maxAccess,
+            password: password,
+            isActive: true
+        });
+
+        emit PaidShareLinkCreated(linkId, fileId, pricePerAccess);
+        return linkId;
+    }
+
+    function accessPaidShareLink(bytes32 linkId, string calldata password)
+        external payable nonReentrant returns(string memory cid) {
+            PaidShareLink storage link = PaidShareLinks[linkId];
+            if(!link.isActive) revert LinkNotActive();
+            if(link.expiryDate <= block.timestamp) revert LinkNotActive();
+            if(link.maxAccess != 0 && link.accessCount >= link.maxAccess) revert LinkExpired();
+
+            if(bytes(link.password).length > 0 && keccak256(bytes(password)) != keccak256(bytes(link.password))){
+                revert InsufficientPermissions();
+            }
+
+            if(msg.value < link.pricePerAccess) revert InsufficientPayment();
+
+            File storage file = files[link.fileId];
+            cid = file.cid;
+
+            unchecked {
+                ++link.accessCount;
+                ++file.downloadCount;
+            }
+           address payable creator = payable(link.creator);
+           uint128 amount = link.pricePerAccess;
+           creator.transfer(amount);
+           earnedRevenue[creator] += amount;
+
+           emit PaidAccessCompleted(linkId, msg.sender, amount);
+           emit FileAccessed(link.fileId, msg.sender);
+
+        return cid; 
+        }
+
+        function deactivatePaidShareLink(bytes32 linkId) external {
+           PaidShareLink storage link = PaidShareLinks[linkId];
+           if (link.creator != msg.sender) revert NotFileOwner();
+           link.isActive = false;
+        }
+
+        function getPaidShareLink(bytes32 linkId)
+    external view returns (
+        bytes32 fileId,
+        address creator,
+        uint128 pricePerAccess,
+        uint64 expiryDate,
+        uint32 accessCount,
+        uint32 maxAccess,
+        string memory password,
+        bool isActive
+    )
+{
+    PaidShareLink storage link = PaidShareLinks[linkId];
+    return (
+        link.fileId,
+        link.creator,
+        link.pricePerAccess,
+        link.expiryDate,
+        link.accessCount,
+        link.maxAccess,
+        link.password,
+        link.isActive
+    );
+}
+
+    function deleteFile(bytes32 fileId) external onlyFileOwner(fileId) fileExists(fileId){
+        File storage file = files[fileId];
+        FileMetadata storage metadata = fileMetadata[fileId];
+        Subscription storage sub = subscriptions[msg.sender];
+        _removeFromIndexes(fileId, metadata.fileType, metadata.tags, file.isPublic);
+        if (userStorageUsed[msg.sender] >= file.size){
+            userStorageUsed[msg.sender] -= file.size;
+        }
+        else{
+            userStorageUsed[msg.sender] = 0;
+        }
+
+        delete files[fileId];
+        delete fileMetadata[fileId];
+        delete fileExpiryDates[fileId];
+        emit FileDeleted(fileId);
+    }
+    function _removeFromIndexes(
+        bytes32 fileId,
+        string memory fileType,
+        string[] memory tags,
+        bool isPublic
+    ) internal {
+        // Remove from file type index
+        bytes32[] storage typeIndex = fileTypeIndex[fileType];
+        for (uint i = 0; i < typeIndex.length; i++) {
+            if (typeIndex[i] == fileId) {
+                typeIndex[i] = typeIndex[typeIndex.length - 1];
+                typeIndex.pop();
+                break;
+            }
+        }
+
+        // Remove from tag indexes
+        for (uint j = 0; j < tags.length; j++) {
+            bytes32[] storage tagIndex = taggedFiles[tags[j]];
+            for (uint k = 0; k < tagIndex.length; k++) {
+                if (tagIndex[k] == fileId) {
+                    tagIndex[k] = tagIndex[tagIndex.length - 1];
+                    tagIndex.pop();
+                    break;
+                }
+            }
+        }
+
+        // Remove from public files if applicable
+        if (isPublic) {
+            bytes32[] storage pubFiles = publicFiles;
+            for (uint l = 0; l < pubFiles.length; l++) {
+                if (pubFiles[l] == fileId) {
+                    pubFiles[l] = pubFiles[pubFiles.length - 1];
+                    pubFiles.pop();
+                    break;
+                }
+            }
+        }
+    }
+
+
+    function renewFile(bytes32 fileId, uint64 additionalPeriod)
+    external payable onlyFileOwner(fileId) fileExists(fileId)
+{
+    uint256 renewalCost = _calculateStorageCost(files[fileId].size, additionalPeriod);
+    if (msg.value < renewalCost) revert InsufficientPayment();
+
+    unchecked {
+        fileExpiryDates[fileId] += additionalPeriod;
+    }
+
+    filePayments[fileId] += uint128(msg.value);
+}
+
+function updateFileVersion(bytes32 fileId, string calldata newCID, uint128 newSize)
+    external onlyFileOwner(fileId) fileExists(fileId)
+{
+    File storage file = files[fileId];
+    Subscription storage sub = subscriptions[msg.sender];
+
+    // Check storage limit
+    if (userStorageUsed[msg.sender] + newSize - file.size > sub.storageLimit) {
+        revert StorageLimitExceeded();
+    }
+
+    // Update size and CID
+    unchecked {
+        userStorageUsed[msg.sender] += (newSize - file.size);
+        file.size = newSize;
+        file.cid = newCID;
+        ++file.version;
+    }
+
+    emit FileUpdated(fileId, file.version);
+}
+
+function withdrawEarnings() external {
+    uint128 amount = earnedRevenue[msg.sender];
+    require(amount > 0, "No earnings");
+    earnedRevenue[msg.sender] = 0;
+    payable(msg.sender).transfer(amount);
+}
     
     /**
      * @dev Create a shareable link for a file
