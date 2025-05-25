@@ -1,4 +1,4 @@
-const hre = require("hardhat");
+import { run } from "hardhat";
 
 async function main() {
   const contractAddress = "0xa078Adba3D5B184196A60724905034824cf39aeA";
@@ -7,7 +7,7 @@ async function main() {
 
   console.log("Verifying GDV Token contract...");
   try {
-    await hre.run("verify:verify", {
+    await run("verify:verify", {
       address: contractAddress,
       constructorArguments: [initialOwner, initialExchangeRate],
     });
@@ -19,7 +19,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch(error => {
     console.error(error);
     process.exit(1);
-  }); 
+  });

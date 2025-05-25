@@ -1,4 +1,4 @@
-const hre = require("hardhat");
+import { run } from "hardhat";
 
 async function main() {
   const contractAddress = "0xBB5A4C9538B384F42D7f517ea25c15CFFB1BEE0c";
@@ -6,7 +6,7 @@ async function main() {
 
   console.log("Verifying contract...");
   try {
-    await hre.run("verify:verify", {
+    await run("verify:verify", {
       address: contractAddress,
       constructorArguments: [initialOwner],
     });
@@ -18,7 +18,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch(error => {
     console.error(error);
     process.exit(1);
-  }); 
+  });
