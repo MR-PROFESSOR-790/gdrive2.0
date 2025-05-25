@@ -19,7 +19,8 @@
     "lint": "eslint",
     "lint-staged": "eslint",
     "test": "REPORT_GAS=true hardhat test --network hardhat",
-    "verify": "hardhat etherscan-verify"
+    "verify": "hardhat etherscan-verify",
+    "verify:sepolia": "hardhat verify --network sepolia 0xBB5A4C9538B384F42D7f517ea25c15CFFB1BEE0c 0x92bce0933124a954d2b070b7acd248ca02087bcb3aa92aa182d11ac5c3eeccd3"
   },
   "dependencies": {
     "@inquirer/password": "^4.0.2",

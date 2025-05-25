@@ -20,12 +20,13 @@ const getValidatedPassword = async () => {
 const getWalletFromPrivateKey = async () => {
   while (true) {
     const privateKey = await password({ message: "Paste your private key:" });
+    console.log("Received private key length:", privateKey.length);
     try {
       const wallet = new ethers.Wallet(privateKey);
       return wallet;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (e) {
+    } catch (e: any) {
       console.log("❌ Invalid private key format. Please try again.");
+      console.log("Error details:", e.message);
     }
   }
 };

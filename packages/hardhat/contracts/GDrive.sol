@@ -809,20 +809,18 @@ function withdrawEarnings() external {
         uint128 bandwidthLimit,
         uint256 fileCount,
         uint256 folderCount,
-        uint8 subscriptionTier,
-        uint64 subscriptionExpiry
+        uint8 tier,
+        uint64 expiryDate
     ) {
         Subscription storage sub = subscriptions[user];
-        return (
-            userStorageUsed[user],
-            sub.storageLimit,
-            userBandwidthUsed[user],
-            sub.bandwidthLimit,
-            userFiles[user].length,
-            userFolders[user].length,
-            sub.tier,
-            sub.expiryDate
-        );
+        storageUsed = userStorageUsed[user];
+        storageLimit = sub.storageLimit;
+        bandwidthUsed = userBandwidthUsed[user];
+        bandwidthLimit = sub.bandwidthLimit;
+        fileCount = userFiles[user].length;
+        folderCount = userFolders[user].length;
+        tier = sub.tier;
+        expiryDate = sub.expiryDate;
     }
     
     /**
