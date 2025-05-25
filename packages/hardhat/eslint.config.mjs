@@ -1,11 +1,8 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import globals from "globals";
-import tsParser from "@typescript-eslint/parser";
+import { FlatCompat } from "@eslint/eslintrc";
 import prettierPlugin from "eslint-plugin-prettier";
-
+import { defineConfig } from "eslint/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,24 +11,20 @@ const compat = new FlatCompat({
 });
 
 export default defineConfig([
-  globalIgnores(["**/artifacts", "**/cache", "**/contracts", "**/node_modules/", "**/typechain-types", "**/*.json"]),
   {
-    extends: compat.extends("plugin:@typescript-eslint/recommended", "prettier"),
-
     plugins: {
       prettier: prettierPlugin,
     },
-    languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-
-      parser: tsParser,
-    },
+    extends: compat.extends("plugin:@typescript-eslint/recommended", "prettier"),
 
     rules: {
-      "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/no-unused-vars": ["warn", { 
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true 
+      }],
 
       "prettier/prettier": [
         "warn",
@@ -40,5 +33,14 @@ export default defineConfig([
         },
       ],
     },
+
+    ignores: [
+      "node_modules/**",
+      "artifacts/**",
+      "cache/**",
+      "typechain-types/**",
+      "deployments/**",
+      "**/*.json"
+    ],
   },
 ]);

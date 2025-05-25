@@ -28,5 +28,11 @@ export default defineConfig([
         },
       ],
     },
+
+    ignores: [
+      "node_modules/**",
+      ".next/**",
+      "contracts/deployedContracts.ts"
+    ],
   },
 ]);

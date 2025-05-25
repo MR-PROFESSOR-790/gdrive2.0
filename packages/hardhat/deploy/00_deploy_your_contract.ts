@@ -25,10 +25,15 @@ const deployContracts: DeployFunction = async function (hre: HardhatRuntimeEnvir
     autoMine: true,
   });
 
-  // Get GDV Token instance
-  const gdvToken = await hre.ethers.getContract<Contract>("GDVToken", deployer);
+  // Get token symbol for logging
+  const gdvToken = await hre.ethers.getContractAt("GDVToken", gdvTokenDeployment.address);
+  const tokenSymbol = await gdvToken.symbol();
+
+  // Verify token initialization
+  const tokenBalance = await gdvToken.balanceOf(deployer);
   console.log("✅ GDV Token deployed at:", gdvTokenDeployment.address);
-  console.log("💱 Initial exchange rate:", hre.ethers.formatUnits(initialExchangeRate, 0), "GDV per ETH");
+  console.log("💱 Initial exchange rate:", hre.ethers.formatUnits(initialExchangeRate, 0), `${tokenSymbol} per ETH`);
+  console.log("💰 Initial token balance:", hre.ethers.formatUnits(tokenBalance, 18), tokenSymbol);
 
   // Deploy GDrive contract
   console.log("\n📝 Deploying GDrive contract...");
@@ -92,18 +97,18 @@ const deployContracts: DeployFunction = async function (hre: HardhatRuntimeEnvir
   console.log("\n📖 Usage Examples:");
   console.log(`
 1. Buy GDV tokens:
-   await gdvToken.buyTokens({ value: ethers.parseEther("1") });
+   await gdvTokenContract.buyTokens({ value: ethers.parseEther("1") });
 
 2. Upload file with GDV:
-   await gdvToken.approve(gDrive.address, amount);
+   await gdvTokenContract.approve(gDrive.address, amount);
    await gDrive.uploadFileWithGDV(params);
 
 3. Buy subscription with GDV:
-   await gdvToken.approve(gDrive.address, amount);
+   await gdvTokenContract.approve(gDrive.address, amount);
    await gDrive.purchaseSubscriptionWithGDV(tier, duration, referrer);
 
 4. Convert GDV to ETH:
-   await gdvToken.approve(gDrive.address, amount);
+   await gdvTokenContract.approve(gDrive.address, amount);
    await gDrive.convertGDVToEth(amount);
   `);
 };
