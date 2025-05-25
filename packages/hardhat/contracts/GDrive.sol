@@ -154,6 +154,30 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     uint128[4] public tierBandwidthLimits;
     uint128[4] public tierPrices;
     
+    // ============ TOKEN PAYMENT STATE VARIABLES ============
+    
+    // Supported payment tokens
+    mapping(address => bool) public supportedTokens;
+    // Token prices (in wei/token)
+    mapping(address => uint256) public tokenPrices;
+    // Default payment token
+    address public defaultPaymentToken;
+    
+    // ============ TOKEN PAYMENT EVENTS ============
+    
+    event TokenAdded(address indexed token, uint256 price);
+    event TokenRemoved(address indexed token);
+    event TokenPriceUpdated(address indexed token, uint256 newPrice);
+    event DefaultTokenChanged(address indexed newDefaultToken);
+    event TokenPaymentReceived(address indexed token, address indexed from, uint256 amount);
+    
+    // ============ TOKEN PAYMENT ERRORS ============
+    
+    error TokenNotSupported();
+    error InvalidTokenPrice();
+    error TokenTransferFailed();
+    error InsufficientTokenAllowance();
+    
     // ============ EVENTS (Optimized) ============
     
     event FileUploaded(bytes32 indexed fileId, address indexed owner, string cid);
@@ -923,6 +947,195 @@ function withdrawEarnings() external {
                 emit ReferralRewardPaid(referrer, reward);
             }
         }
+    }
+    
+    // ============ TOKEN PAYMENT FUNCTIONS ============
+    
+    /**
+     * @dev Add a new supported payment token
+     * @param token Address of the ERC20 token
+     * @param price Price in wei per token
+     */
+    function addPaymentToken(address token, uint256 price) external onlyOwner {
+        if (token == address(0)) revert InvalidInput();
+        if (price == 0) revert InvalidTokenPrice();
+        
+        supportedTokens[token] = true;
+        tokenPrices[token] = price;
+        
+        emit TokenAdded(token, price);
+    }
+    
+    /**
+     * @dev Remove a supported payment token
+     * @param token Address of the ERC20 token
+     */
+    function removePaymentToken(address token) external onlyOwner {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        
+        supportedTokens[token] = false;
+        tokenPrices[token] = 0;
+        
+        if (defaultPaymentToken == token) {
+            defaultPaymentToken = address(0);
+        }
+        
+        emit TokenRemoved(token);
+    }
+    
+    /**
+     * @dev Update token price
+     * @param token Address of the ERC20 token
+     * @param newPrice New price in wei per token
+     */
+    function updateTokenPrice(address token, uint256 newPrice) external onlyOwner {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        if (newPrice == 0) revert InvalidTokenPrice();
+        
+        tokenPrices[token] = newPrice;
+        
+        emit TokenPriceUpdated(token, newPrice);
+    }
+    
+    /**
+     * @dev Set default payment token
+     * @param token Address of the ERC20 token
+     */
+    function setDefaultPaymentToken(address token) external onlyOwner {
+        if (token != address(0) && !supportedTokens[token]) revert TokenNotSupported();
+        
+        defaultPaymentToken = token;
+        
+        emit DefaultTokenChanged(token);
+    }
+    
+    /**
+     * @dev Calculate token amount needed for payment
+     * @param ethAmount Amount in wei
+     * @param token Address of the payment token
+     * @return tokenAmount Amount of tokens needed
+     */
+    function calculateTokenAmount(uint256 ethAmount, address token) public view returns (uint256 tokenAmount) {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        
+        uint256 tokenPrice = tokenPrices[token];
+        // Calculate token amount with rounding up
+        tokenAmount = (ethAmount * 1e18 + tokenPrice - 1) / tokenPrice;
+    }
+    
+    /**
+     * @dev Upload file with token payment
+     * @param params Encoded parameters
+     * @param token Address of the payment token
+     */
+    function uploadFileWithToken(bytes calldata params, address token) 
+        external 
+        nonReentrant 
+        whenNotPaused 
+        returns (bytes32 fileId) 
+    {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        
+        // Decode parameters to get size and storage period
+        (
+            , , , uint128 size, , , , , , uint64 storagePeriod
+        ) = abi.decode(params, (string, string, string, uint128, string, bool, bool, string[], bytes32, uint64));
+        
+        // Calculate ETH cost
+        uint256 ethCost = _calculateStorageCost(size, storagePeriod);
+        
+        // Calculate token amount needed
+        uint256 tokenAmount = calculateTokenAmount(ethCost, token);
+        
+        // Transfer tokens from user
+        IERC20(token).transferFrom(msg.sender, address(this), tokenAmount);
+        
+        // Process the upload
+        fileId = _uploadFile(params);
+        
+        emit TokenPaymentReceived(token, msg.sender, tokenAmount);
+    }
+    
+    /**
+     * @dev Purchase subscription with token payment
+     * @param tier Subscription tier
+     * @param duration Duration in seconds
+     * @param referrer Referrer address
+     * @param token Address of the payment token
+     */
+    function purchaseSubscriptionWithToken(
+        uint8 tier,
+        uint64 duration,
+        address referrer,
+        address token
+    ) external nonReentrant {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        
+        // Calculate ETH cost
+        uint256 ethCost = _calculateSubscriptionCost(tier, duration);
+        
+        // Calculate token amount needed
+        uint256 tokenAmount = calculateTokenAmount(ethCost, token);
+        
+        // Transfer tokens from user
+        IERC20(token).transferFrom(msg.sender, address(this), tokenAmount);
+        
+        // Process the subscription purchase
+        _processSubscriptionPurchase(tier, duration, referrer);
+        
+        emit TokenPaymentReceived(token, msg.sender, tokenAmount);
+    }
+    
+    /**
+     * @dev Internal function to process subscription purchase
+     */
+    function _processSubscriptionPurchase(
+        uint8 tier,
+        uint64 duration,
+        address referrer
+    ) internal {
+        if (tier > MAX_TIER) revert InvalidInput();
+        if (duration < minimumStoragePeriod) revert InvalidInput();
+        
+        // Handle referral (only once per user)
+        if (referrer != address(0) && referrer != msg.sender && referrers[msg.sender] == address(0)) {
+            referrers[msg.sender] = referrer;
+        }
+        
+        // Update subscription
+        Subscription storage sub = subscriptions[msg.sender];
+        if (sub.expiryDate > block.timestamp) {
+            unchecked {
+                sub.expiryDate += duration;
+            }
+        } else {
+            unchecked {
+                sub.expiryDate = uint64(block.timestamp + duration);
+            }
+        }
+        
+        sub.user = msg.sender;
+        sub.storageLimit = tierStorageLimits[tier];
+        sub.bandwidthLimit = tierBandwidthLimits[tier];
+        sub.tier = tier;
+        sub.isActive = true;
+        
+        // Reset bandwidth tracking
+        lastBandwidthReset[msg.sender] = uint64(block.timestamp);
+        userBandwidthUsed[msg.sender] = 0;
+        
+        emit SubscriptionPurchased(msg.sender, tier, duration);
+    }
+    
+    /**
+     * @dev Withdraw tokens from contract
+     * @param token Address of the token to withdraw
+     * @param amount Amount to withdraw
+     */
+    function withdrawTokens(address token, uint256 amount) external onlyOwner {
+        if (!supportedTokens[token]) revert TokenNotSupported();
+        
+        IERC20(token).transfer(owner(), amount);
     }
     
     // ============ RECEIVE FUNCTION ============
