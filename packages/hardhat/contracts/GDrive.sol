@@ -5,6 +5,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./GDVToken.sol";
+
+// Interface for GDVToken specific functions
+interface IGDVToken is IERC20 {
+    function getTokenAmount(uint256 ethAmount) external view returns (uint256);
+    function getEthAmount(uint256 tokenAmount) external view returns (uint256);
+}
 
 /**
  * @title GDrive 2.0 - Gas Optimized Decentralized Storage Contract
@@ -193,6 +200,19 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     event PaidAccessCompleted(bytes32 indexed linkId, address accessor, uint128 amount);
     event RevenueWithdrawn(address indexed user, uint128 amount);
 
+    // ============ GDV TOKEN INTEGRATION ============
+    
+    IGDVToken public gdvToken;
+    bool public gdvEnabled;
+    uint256 public gdvDiscount; // Discount percentage in basis points (e.g., 1000 = 10%)
+    
+    event GDVTokenSet(address indexed token);
+    event GDVEnabled(bool enabled);
+    event GDVDiscountUpdated(uint256 newDiscount);
+    event GDVPaymentReceived(address indexed from, uint256 amount);
+    
+    error GDVNotEnabled();
+    error InvalidGDVDiscount();
     
     // ============ MODIFIERS (Gas Optimized) ============
     
@@ -1136,6 +1156,127 @@ function withdrawEarnings() external {
         if (!supportedTokens[token]) revert TokenNotSupported();
         
         IERC20(token).transfer(owner(), amount);
+    }
+    
+    // ============ GDV TOKEN INTEGRATION ============
+    
+    /**
+     * @dev Set GDV token address
+     * @param token Address of the GDV token contract
+     */
+    function setGDVToken(address token) external onlyOwner {
+        if (token == address(0)) revert InvalidInput();
+        gdvToken = IGDVToken(token);
+        gdvEnabled = true;
+        emit GDVTokenSet(token);
+    }
+    
+    /**
+     * @dev Enable/disable GDV payments
+     * @param enabled Whether GDV payments should be enabled
+     */
+    function setGDVEnabled(bool enabled) external onlyOwner {
+        gdvEnabled = enabled;
+        emit GDVEnabled(enabled);
+    }
+    
+    /**
+     * @dev Update GDV discount percentage
+     * @param discount New discount percentage in basis points
+     */
+    function updateGDVDiscount(uint256 discount) external onlyOwner {
+        if (discount > BASIS_POINTS) revert InvalidGDVDiscount();
+        gdvDiscount = discount;
+        emit GDVDiscountUpdated(discount);
+    }
+    
+    /**
+     * @dev Calculate GDV amount needed for payment with discount
+     * @param ethAmount Amount in wei
+     * @return gdvAmount Amount of GDV tokens needed
+     */
+    function calculateGDVAmount(uint256 ethAmount) public view returns (uint256 gdvAmount) {
+        if (!gdvEnabled) revert GDVNotEnabled();
+        
+        uint256 discountedAmount = ethAmount * (BASIS_POINTS - gdvDiscount) / BASIS_POINTS;
+        return gdvToken.getTokenAmount(discountedAmount);
+    }
+    
+    /**
+     * @dev Upload file with GDV payment
+     * @param params Encoded parameters
+     */
+    function uploadFileWithGDV(bytes calldata params) 
+        external 
+        nonReentrant 
+        whenNotPaused 
+        returns (bytes32 fileId) 
+    {
+        if (!gdvEnabled) revert GDVNotEnabled();
+        
+        // Decode parameters to get size and storage period
+        (
+            , , , uint128 size, , , , , , uint64 storagePeriod
+        ) = abi.decode(params, (string, string, string, uint128, string, bool, bool, string[], bytes32, uint64));
+        
+        // Calculate ETH cost
+        uint256 ethCost = _calculateStorageCost(size, storagePeriod);
+        
+        // Calculate GDV amount needed with discount
+        uint256 gdvAmount = calculateGDVAmount(ethCost);
+        
+        // Transfer GDV tokens from user
+        gdvToken.transferFrom(msg.sender, address(this), gdvAmount);
+        
+        // Process the upload
+        fileId = _uploadFile(params);
+        
+        emit GDVPaymentReceived(msg.sender, gdvAmount);
+    }
+    
+    /**
+     * @dev Purchase subscription with GDV payment
+     * @param tier Subscription tier
+     * @param duration Duration in seconds
+     * @param referrer Referrer address
+     */
+    function purchaseSubscriptionWithGDV(
+        uint8 tier,
+        uint64 duration,
+        address referrer
+    ) external nonReentrant {
+        if (!gdvEnabled) revert GDVNotEnabled();
+        
+        // Calculate ETH cost
+        uint256 ethCost = _calculateSubscriptionCost(tier, duration);
+        
+        // Calculate GDV amount needed with discount
+        uint256 gdvAmount = calculateGDVAmount(ethCost);
+        
+        // Transfer GDV tokens from user
+        gdvToken.transferFrom(msg.sender, address(this), gdvAmount);
+        
+        // Process the subscription purchase
+        _processSubscriptionPurchase(tier, duration, referrer);
+        
+        emit GDVPaymentReceived(msg.sender, gdvAmount);
+    }
+    
+    /**
+     * @dev Convert GDV tokens to ETH
+     * @param gdvAmount Amount of GDV tokens to convert
+     */
+    function convertGDVToEth(uint256 gdvAmount) external nonReentrant {
+        if (!gdvEnabled) revert GDVNotEnabled();
+        
+        // Transfer GDV tokens from user
+        gdvToken.transferFrom(msg.sender, address(this), gdvAmount);
+        
+        // Calculate ETH amount
+        uint256 ethAmount = gdvToken.getEthAmount(gdvAmount);
+        
+        // Transfer ETH to user
+        payable(msg.sender).transfer(ethAmount);
     }
     
     // ============ RECEIVE FUNCTION ============
