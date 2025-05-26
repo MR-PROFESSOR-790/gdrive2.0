@@ -58,6 +58,7 @@
     "node": ">=20.18.3"
   },
   "dependencies": {
-    "se-2": "file:"
+    "se-2": "file:",
+    "three-stdlib": "^2.36.0"
   }
 }
