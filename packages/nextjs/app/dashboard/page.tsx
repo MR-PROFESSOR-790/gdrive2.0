@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
+import FileExplorer from "~~/components/GDrive/FileExplorer";
 import { FileList } from "~~/components/GDrive/FileList";
 import { FileUpload } from "~~/components/GDrive/FileUpload";
+import Sidebar from "~~/components/GDrive/Sidebar";
 import { Subscription } from "~~/components/GDrive/Subscription";
 import { Address } from "~~/components/scaffold-eth";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth/RainbowKitCustomConnectButton";
@@ -26,7 +28,8 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-base-100">
       {/* Header */}
-      <header className="bg-base-200 border-b border-base-300">
+      {/* This header will be moved or adapted */}
+      {/* <header className="bg-base-200 border-b border-base-300">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -39,20 +42,24 @@ const Dashboard = () => {
             <RainbowKitCustomConnectButton />
           </div>
         </div>
-      </header>
+      </header> */}
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="flex flex-col gap-8">
-            <FileUpload />
-            <FileList />
-          </div>
-          <div className="flex flex-col gap-8">
-            <Subscription />
-          </div>
-        </div>
-      </main>
+      {/* Main Content Layout */}
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside className="w-64 bg-base-200 p-4 border-r border-base-300 hidden md:block">
+          <Sidebar />
+        </aside>
+
+        {/* Main File Explorer Area */}
+        <main className="flex-1 p-8">
+          <FileExplorer />
+          {/* Temporarily keep other components for now */}
+          {/* <FileUpload /> */}
+          {/* <FileList /> */}
+          {/* <Subscription /> */}
+        </main>
+      </div>
     </div>
   );
 };

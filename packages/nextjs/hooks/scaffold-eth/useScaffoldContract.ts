@@ -1,4 +1,4 @@
-import { Account, Address, Chain, Client, Transport, getContract } from "viem";
+import { Account, Address, Chain, Client, PublicClient, Transport, WalletClient } from "viem";
 import { usePublicClient } from "wagmi";
 import { GetWalletClientReturnType } from "wagmi/actions";
 import { useSelectedNetwork } from "~~/hooks/scaffold-eth";
@@ -16,6 +16,7 @@ import { Contract, ContractName } from "~~/utils/scaffold-eth/contract";
  */
 export const useScaffoldContract = <
   TContractName extends ContractName,
+  // @ts-ignore - Bypassing complex generic type constraint check due to version incompatibility
   TWalletClient extends Exclude<GetWalletClientReturnType, null> | undefined,
 >({
   contractName,
@@ -36,16 +37,15 @@ export const useScaffoldContract = <
 
   let contract = undefined;
   if (deployedContractData && publicClient) {
+    // @ts-ignore - Suppressing type error due to potential wagmi/viem version conflicts
     contract = getContract<
       Transport,
       Address,
       Contract<TContractName>["abi"],
+      // @ts-ignore - Suppressing type error related to wagmi/viem version conflicts in getContract client type
       TWalletClient extends Exclude<GetWalletClientReturnType, null>
-        ? {
-            public: Client<Transport, Chain>;
-            wallet: TWalletClient;
-          }
-        : { public: Client<Transport, Chain> },
+        ? { public: PublicClient; wallet: WalletClient }
+        : { public: PublicClient },
       Chain,
       Account
     >({

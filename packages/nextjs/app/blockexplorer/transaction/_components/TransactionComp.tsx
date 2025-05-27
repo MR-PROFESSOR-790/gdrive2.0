@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Hash, Transaction, TransactionReceipt, formatEther, formatUnits } from "viem";
+import { Hash, Log, Transaction, TransactionReceipt, formatEther, formatUnits } from "viem";
 import { hardhat } from "viem/chains";
 import { usePublicClient } from "wagmi";
 import { Address } from "~~/components/scaffold-eth";
@@ -133,7 +133,8 @@ const TransactionComp = ({ txHash }: { txHash: Hash }) => {
                   <ul>
                     {receipt?.logs?.map((log, i) => (
                       <li key={i}>
-                        <strong>Log {i} topics:</strong> {JSON.stringify(log.topics, replacer, 2)}
+                        <strong>Log {i} topics:</strong>{" "}
+                        {(log as any)?.topics ? JSON.stringify((log as any).topics, replacer, 2) : "No topics"}
                       </li>
                     ))}
                   </ul>

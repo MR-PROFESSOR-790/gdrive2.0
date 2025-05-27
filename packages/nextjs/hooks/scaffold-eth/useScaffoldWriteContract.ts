@@ -71,7 +71,7 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
     }
   }, [configOrName]);
 
-  const { chain: accountChain } = useAccount();
+  const { chain: accountChain, address } = useAccount();
   const writeTx = useTransactor();
   const [isMining, setIsMining] = useState(false);
 
@@ -112,25 +112,17 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       const writeContractObject = {
         abi: deployedContractData.abi as Abi,
         address: deployedContractData.address,
+        chain: accountChain,
+        account: address,
         ...variables,
       } as WriteContractVariables<Abi, string, any[], Config, number>;
 
-      if (!finalConfig?.disableSimulate) {
-        await simulateContractWriteAndNotifyError({ wagmiConfig, writeContractParams: writeContractObject });
+      if (!("disableSimulate" in finalConfig) || !finalConfig.disableSimulate) {
+        await simulateContractWriteAndNotifyError({ wagmiConfig, writeContractParams: writeContractObject as any });
       }
 
       const makeWriteWithParams = () =>
-        wagmiContractWrite.writeContractAsync(
-          writeContractObject,
-          mutateOptions as
-            | MutateOptions<
-                WriteContractReturnType,
-                WriteContractErrorType,
-                WriteContractVariables<Abi, string, any[], Config, number>,
-                unknown
-              >
-            | undefined,
-        );
+        wagmiContractWrite.writeContractAsync(writeContractObject as any, mutateOptions as any);
       const writeTxResult = await writeTx(makeWriteWithParams, { blockConfirmations, onBlockConfirmation });
 
       return writeTxResult;
@@ -166,6 +158,8 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       {
         abi: deployedContractData.abi as Abi,
         address: deployedContractData.address,
+        chain: accountChain,
+        account: address,
         ...variables,
       } as WriteContractVariables<Abi, string, any[], Config, number>,
       options as

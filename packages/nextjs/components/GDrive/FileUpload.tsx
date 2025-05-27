@@ -21,7 +21,12 @@ interface UploadParams {
   storagePeriod: bigint;
 }
 
-export const FileUpload = () => {
+// Define the props interface for FileUpload
+interface FileUploadProps {
+  onUploadSuccess?: () => void; // Make it optional
+}
+
+export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const { address } = useAccount();
@@ -117,6 +122,11 @@ export const FileUpload = () => {
 
       console.log("Transaction submitted:", result);
       notification.success("File uploaded successfully!");
+
+      // Call the success handler if provided
+      if (onUploadSuccess) {
+        onUploadSuccess();
+      }
     } catch (error) {
       console.error("Upload error:", error);
       if (error instanceof Error) {

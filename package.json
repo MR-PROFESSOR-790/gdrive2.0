@@ -50,15 +50,22 @@
     "verify": "yarn hardhat:verify"
   },
   "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.6",
     "husky": "~9.1.6",
-    "lint-staged": "~13.2.2"
+    "lint-staged": "~13.2.2",
+    "typescript": "latest"
   },
   "packageManager": "yarn@3.2.3",
   "engines": {
     "node": ">=20.18.3"
   },
   "dependencies": {
+    "@wagmi/core": "^2.17.2",
+    "ethers": "^5.7.2",
     "se-2": "file:",
-    "three-stdlib": "^2.36.0"
+    "three-stdlib": "^2.36.0",
+    "viem": "latest",
+    "wagmi": "latest"
   }
 }
