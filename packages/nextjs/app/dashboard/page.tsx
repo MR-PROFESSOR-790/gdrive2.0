@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import FileExplorer from "~~/components/GDrive/FileExplorer";
+import { FileGallery } from "~~/components/GDrive/FileGallery";
 import { FileList } from "~~/components/GDrive/FileList";
 import { FileUpload } from "~~/components/GDrive/FileUpload";
 import Sidebar from "~~/components/GDrive/Sidebar";
@@ -14,6 +15,8 @@ import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth/Rainbo
 const Dashboard = () => {
   const { address: connectedAddress, isConnected } = useAccount();
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState("files");
 
   useEffect(() => {
     if (!isConnected) {
@@ -53,11 +56,23 @@ const Dashboard = () => {
 
         {/* Main File Explorer Area */}
         <main className="flex-1 p-8">
-          <FileExplorer />
-          {/* Temporarily keep other components for now */}
-          {/* <FileUpload /> */}
-          {/* <FileList /> */}
-          {/* <Subscription /> */}
+          <div className="tabs tabs-boxed mb-4">
+            <a className={`tab ${activeTab === "files" ? "tab-active" : ""}`} onClick={() => setActiveTab("files")}>
+              My Files
+            </a>
+            <a className={`tab ${activeTab === "gallery" ? "tab-active" : ""}`} onClick={() => setActiveTab("gallery")}>
+              3D Gallery
+            </a>
+            <a
+              className={`tab ${activeTab === "subscription" ? "tab-active" : ""}`}
+              onClick={() => setActiveTab("subscription")}
+            >
+              Subscription
+            </a>
+          </div>
+          {activeTab === "files" && <FileExplorer />}
+          {activeTab === "gallery" && <FileGallery />}
+          {activeTab === "subscription" && <Subscription />}
         </main>
       </div>
     </div>

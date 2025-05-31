@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import FileItem from "./FileItem";
 import { FileUpload } from "./FileUpload";
+import FolderCreationModal from "./FolderCreationModal";
 import { Address } from "viem";
 import { useAccount } from "wagmi";
 import useUserFiles from "~~/hooks/scaffold-eth/useUserFiles";
@@ -9,13 +10,29 @@ const FileExplorer = () => {
   const { address: connectedAddress } = useAccount();
   const { fileIds, isLoading, error } = useUserFiles(connectedAddress);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [showAddOptions, setShowAddOptions] = useState(false);
 
   const handleOpenUploadModal = () => {
     setIsUploadModalOpen(true);
+    setShowAddOptions(false);
   };
 
   const handleCloseUploadModal = () => {
     setIsUploadModalOpen(false);
+  };
+
+  const handleOpenFolderModal = () => {
+    setIsFolderModalOpen(true);
+    setShowAddOptions(false);
+  };
+
+  const handleCloseFolderModal = () => {
+    setIsFolderModalOpen(false);
+  };
+
+  const handleAddClick = () => {
+    setShowAddOptions(!showAddOptions);
   };
 
   // Helper function to safely get error message
@@ -53,9 +70,31 @@ const FileExplorer = () => {
           {/* Search input */}
           <input type="text" placeholder="Search" className="input input-bordered input-sm" />
           {/* Add folder/file button */}
-          <button className="btn btn-sm btn-primary" onClick={handleOpenUploadModal}>
-            + Add New
-          </button>
+          <div className="relative">
+            <button className="btn btn-sm btn-primary" onClick={handleAddClick}>
+              + Add New
+            </button>
+            {showAddOptions && (
+              <ul className="absolute right-0 mt-2 w-40 bg-base-100 rounded-md shadow-lg z-10">
+                <li>
+                  <button
+                    className="block w-full text-left px-4 py-2 hover:bg-base-200"
+                    onClick={handleOpenUploadModal}
+                  >
+                    Upload File
+                  </button>
+                </li>
+                <li>
+                  <button
+                    className="block w-full text-left px-4 py-2 hover:bg-base-200"
+                    onClick={handleOpenFolderModal}
+                  >
+                    Create Folder
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
           {/* View toggle (grid/list) */}
           {/* Add icon buttons for grid/list view */}
         </div>
@@ -81,6 +120,15 @@ const FileExplorer = () => {
               </button>
             </div>
             <FileUpload onUploadSuccess={handleCloseUploadModal} />
+          </div>
+        </div>
+      )}
+
+      {/* Folder Creation Modal */}
+      {isFolderModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-base-100 p-8 rounded-lg shadow-xl max-w-md w-full">
+            <FolderCreationModal onClose={handleCloseFolderModal} />
           </div>
         </div>
       )}

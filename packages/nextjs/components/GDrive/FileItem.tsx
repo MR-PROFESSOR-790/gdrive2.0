@@ -1,7 +1,8 @@
 import React from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-eth/useScaffoldReadContract";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { notification } from "~~/utils/scaffold-eth";
 
 // Define a type for the file details we expect from getFileDetails
 interface FileDetails {
@@ -33,6 +34,17 @@ const FileItem = ({ fileId, userAddress }: FileItemProps) => {
     functionName: "getFileDetails",
     args: [fileId] as const,
   });
+
+  const { writeContractAsync } = useScaffoldWriteContract({ contractName: "GDrive" });
+
+  const handleDelete = async () => {
+    try {
+      await writeContractAsync({ functionName: "deleteFile", args: [fileId] });
+      notification.success("File deleted!");
+    } catch (error) {
+      notification.error("Failed to delete file");
+    }
+  };
 
   if (isLoading) {
     return <div>Loading file...</div>;
@@ -83,6 +95,9 @@ const FileItem = ({ fileId, userAddress }: FileItemProps) => {
       <span className="mt-2 text-sm text-center break-words w-full">{file.name}</span>
       {/* Optionally display file size, upload time, etc. */}
       {/* <span className="text-xs text-base-content/70">{(Number(file.size) / 1024).toFixed(2)} KB</span> */}
+      <button className="btn btn-sm btn-error mt-2" onClick={handleDelete}>
+        Delete
+      </button>
     </div>
   );
 };
