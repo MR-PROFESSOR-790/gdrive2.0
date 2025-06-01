@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { useAccount } from "wagmi";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { notification } from "~~/utils/scaffold-eth";
 
 interface FileData {
   id: `0x${string}`;
@@ -16,6 +17,14 @@ interface FileData {
   downloadCount: number;
   version: number;
 }
+
+const showToast = (message: string, type: "success" | "error" | "info") => {
+  return (
+    <div className={`toast toast-${type}`}>
+      <div className="alert alert-${type}">{message}</div>
+    </div>
+  );
+};
 
 export const FileGallery = () => {
   const { address } = useAccount();
@@ -151,6 +160,40 @@ export const FileGallery = () => {
     };
     animate();
 
+    // Handle mouse clicks
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const handleClick = (event: MouseEvent) => {
+      // Calculate mouse position in normalized device coordinates (-1 to +1) for both components
+      const container = containerRef.current;
+      if (!container || !rendererRef.current) return;
+
+      const rect = container.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Update the picking ray with the camera and mouse position
+      raycaster.setFromCamera(mouse, camera);
+
+      // Calculate objects intersecting the picking ray
+      const intersects = raycaster.intersectObjects(scene.children);
+
+      if (intersects.length > 0) {
+        // Find the first intersected object that is a cube representing a file
+        const clickedObject = intersects.find(
+          intersect => intersect.object instanceof THREE.Mesh && intersect.object.userData.id,
+        );
+
+        if (clickedObject && clickedObject.object.userData.name) {
+          // Display file name using the showToast helper
+          notification.info(showToast(`Selected file: ${clickedObject.object.userData.name}`, "info"));
+        }
+      }
+    };
+
+    renderer.domElement.addEventListener("click", handleClick);
+
     // Handle window resize
     const handleResize = () => {
       if (!containerRef.current) return;
@@ -164,6 +207,7 @@ export const FileGallery = () => {
       window.removeEventListener("resize", handleResize);
       containerRef.current?.removeChild(renderer.domElement);
       renderer.dispose();
+      renderer.domElement.removeEventListener("click", handleClick); // Clean up click listener
     };
   }, []);
 

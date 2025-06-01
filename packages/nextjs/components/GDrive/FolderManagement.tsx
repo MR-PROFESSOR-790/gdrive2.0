@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import FolderCreationModal from "./FolderCreationModal";
-import FolderItem from "./FolderItem.tsx";
+import FolderItem from "./FolderItem";
 import { Address, ContractFunctionExecutionError } from "viem";
 import { useAccount } from "wagmi";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";

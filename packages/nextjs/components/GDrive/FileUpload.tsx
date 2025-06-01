@@ -191,7 +191,12 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
           <p>Type: {file.type}</p>
         </div>
       )}
-      <button className="btn btn-primary" onClick={handleUpload} disabled={!file || uploading || isUploading}>
+      <button
+        className="btn btn-primary tooltip"
+        data-tip="Upload files to IPFS and store metadata on-chain"
+        onClick={handleUpload}
+        disabled={!file || uploading || isUploading}
+      >
         {uploading || isUploading ? <span className="loading loading-spinner"></span> : "Upload"}
       </button>
     </div>

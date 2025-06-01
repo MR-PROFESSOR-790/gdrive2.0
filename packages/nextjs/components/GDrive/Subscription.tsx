@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import { parseEther } from "viem";
 import { Address } from "viem";
 import { useAccount } from "wagmi";
@@ -146,11 +147,13 @@ export const Subscription = () => {
         // value: selectedTierData.price,
       });
 
-      notification.success("Subscription purchase initiated.");
+      // Use react-toastify for success notification
+      toast.success("Subscription purchased successfully!");
     } catch (error) {
       console.error("Purchase error:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      notification.error(`Failed to purchase subscription: ${errorMessage}`);
+      // Use react-toastify for error notification
+      toast.error(`Failed to purchase subscription: ${errorMessage}`);
     }
   };
 
@@ -237,7 +240,12 @@ export const Subscription = () => {
 
       {/* Display Subscription Tiers */}
       {allTiers.length === 0 ? (
-        <div className="text-center">Loading subscription tiers...</div>
+        // Loading placeholder for tiers
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-gray-800/50 h-40 rounded-lg animate-pulse"></div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {allTiers.map((tier, index) => (
@@ -257,11 +265,10 @@ export const Subscription = () => {
                 </div>
                 <div className="card-actions justify-end">
                   <button
-                    className={`btn ${selectedTier === index ? "btn-primary" : "btn-outline"}`}
-                    onClick={e => {
-                      e.stopPropagation();
-                      setSelectedTier(index);
-                    }}
+                    className="btn w-full bg-gray-600 text-gray-300 border-none hover:bg-gray-500 transition-all duration-300"
+                    onClick={() => setSelectedTier(index)}
+                    disabled={selectedTier === index}
+                    aria-label={`Select Tier ${index}`}
                   >
                     {selectedTier === index ? "Selected" : "Select"}
                   </button>
