@@ -142,7 +142,7 @@ export const Subscription = () => {
 
       await purchaseSubscription({
         functionName: "purchaseSubscription",
-        args: [selectedTier, durationInSeconds, ""], // Added third parameter as empty string
+        args: [selectedTier, durationInSeconds, "0x0000000000000000000000000000000000000000"],
         // Uncomment if payment is in ETH
         // value: selectedTierData.price,
       });
