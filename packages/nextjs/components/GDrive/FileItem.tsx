@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import PaidShareLinkModal from "./PaidShareLinkModal";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
@@ -36,6 +37,7 @@ const FileItem = ({ fileId, userAddress }: FileItemProps) => {
   });
 
   const { writeContractAsync } = useScaffoldWriteContract({ contractName: "GDrive" });
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
@@ -44,6 +46,14 @@ const FileItem = ({ fileId, userAddress }: FileItemProps) => {
     } catch (error) {
       notification.error("Failed to delete file");
     }
+  };
+
+  const handleOpenShareModal = () => {
+    setIsShareModalOpen(true);
+  };
+
+  const handleCloseShareModal = () => {
+    setIsShareModalOpen(false);
   };
 
   if (isLoading) {
@@ -95,9 +105,23 @@ const FileItem = ({ fileId, userAddress }: FileItemProps) => {
       <span className="mt-2 text-sm text-center break-words w-full">{file.name}</span>
       {/* Optionally display file size, upload time, etc. */}
       {/* <span className="text-xs text-base-content/70">{(Number(file.size) / 1024).toFixed(2)} KB</span> */}
-      <button className="btn btn-sm btn-error mt-2" onClick={handleDelete}>
-        Delete
-      </button>
+      <div className="flex gap-2 mt-2">
+        <button className="btn btn-sm btn-primary" onClick={handleOpenShareModal}>
+          Share
+        </button>
+        <button className="btn btn-sm btn-error" onClick={handleDelete}>
+          Delete
+        </button>
+      </div>
+
+      {/* Paid Share Link Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-base-100 p-8 rounded-lg shadow-xl max-w-md w-full">
+            <PaidShareLinkModal fileId={fileId} onClose={handleCloseShareModal} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

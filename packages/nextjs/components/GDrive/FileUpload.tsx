@@ -34,6 +34,8 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
   const { writeContractAsync: uploadFile, isPending: isUploading } = useScaffoldWriteContract({
     contractName: "GDrive",
   });
+  const [paymentMethod, setPaymentMethod] = useState<"eth" | "gdv" | "token">("eth");
+  const [selectedToken, setSelectedToken] = useState<string>("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -114,13 +116,14 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
       console.log("Encoded params:", encodedParams);
       console.log("Storage cost:", storageCost, "ETH");
 
-      const result = await uploadFile({
-        functionName: "uploadFile",
-        args: [encodedParams],
-        value: parseEther(storageCost),
-      });
+      if (paymentMethod === "eth") {
+        await uploadFile({ functionName: "uploadFile", args: [encodedParams], value: parseEther(storageCost) });
+      } else if (paymentMethod === "gdv") {
+        await uploadFile({ functionName: "uploadFileWithGDV", args: [encodedParams] });
+      } else {
+        await uploadFile({ functionName: "uploadFileWithToken", args: [encodedParams, selectedToken] });
+      }
 
-      console.log("Transaction submitted:", result);
       notification.success("File uploaded successfully!");
 
       // Call the success handler if provided
@@ -157,6 +160,24 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
   return (
     <div className="flex flex-col gap-4 p-4 bg-base-200 rounded-lg">
       <h2 className="text-xl font-bold">Upload File</h2>
+      <select
+        className="select select-bordered"
+        value={paymentMethod}
+        onChange={e => setPaymentMethod(e.target.value as "eth" | "gdv" | "token")}
+      >
+        <option value="eth">ETH</option>
+        <option value="gdv">GDV Token</option>
+        <option value="token">Other Token</option>
+      </select>
+      {paymentMethod === "token" && (
+        <input
+          type="text"
+          placeholder="Token Address"
+          className="input input-bordered"
+          value={selectedToken}
+          onChange={e => setSelectedToken(e.target.value)}
+        />
+      )}
       <input
         type="file"
         onChange={handleFileChange}
@@ -171,7 +192,7 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
         </div>
       )}
       <button className="btn btn-primary" onClick={handleUpload} disabled={!file || uploading || isUploading}>
-        {uploading || isUploading ? "Uploading..." : "Upload"}
+        {uploading || isUploading ? <span className="loading loading-spinner"></span> : "Upload"}
       </button>
     </div>
   );
