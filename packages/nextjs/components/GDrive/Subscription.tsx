@@ -211,16 +211,18 @@ export const Subscription = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-base-200 rounded-lg">
-      <h2 className="text-xl font-bold">Subscription Plans</h2>
+    <div className="flex flex-col gap-6 p-6 bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-slate-700/50 text-gray-100">
+      <h2 className="text-2xl font-bold text-white">Subscription Plans</h2>
 
       {/* Display User's Current Subscription */}
       {!connectedAddress ? (
-        <div className="alert alert-info">Connect your wallet to see your subscription status.</div>
+        <div className="alert alert-info bg-blue-600/20 border-blue-500/30 text-blue-300">
+          Connect your wallet to see your subscription status.
+        </div>
       ) : isLoadingSubscription ? (
-        <div className="text-center">Loading subscription status...</div>
+        <div className="text-center text-gray-400">Loading subscription status...</div>
       ) : hasActiveSubscription && currentSubscription ? (
-        <div className="alert alert-success">
+        <div className="alert alert-success bg-green-600/20 border-green-500/30 text-green-300">
           <div>
             <p>
               You have an active Tier {currentSubscription.tier} subscription expiring on{" "}
@@ -233,7 +235,7 @@ export const Subscription = () => {
           </div>
         </div>
       ) : (
-        <div className="alert alert-warning">
+        <div className="alert alert-warning bg-yellow-600/20 border-yellow-500/30 text-yellow-300">
           You do not have an active subscription. Please purchase one to upload files.
         </div>
       )}
@@ -243,29 +245,29 @@ export const Subscription = () => {
         // Loading placeholder for tiers
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-gray-800/50 h-40 rounded-lg animate-pulse"></div>
+            <div key={i} className="bg-slate-800/50 h-40 rounded-2xl animate-pulse"></div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {allTiers.map((tier, index) => (
             <div
               key={index}
-              className={`card bg-base-100 shadow-xl cursor-pointer transition-all ${
-                selectedTier === index ? "ring-2 ring-primary" : ""
+              className={`card bg-slate-800/50 shadow-xl cursor-pointer transition-all duration-300 transform hover:scale-105 border border-slate-700/50 ${
+                selectedTier === index ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-900" : ""
               }`}
               onClick={() => setSelectedTier(index)}
             >
-              <div className="card-body">
-                <h3 className="card-title">Tier {index}</h3>
-                <div className="space-y-2">
+              <div className="card-body p-6 space-y-4">
+                <h3 className="card-title text-xl font-semibold text-white">Tier {index}</h3>
+                <div className="space-y-2 text-gray-300">
                   <p>Storage: {formatBytesToGB(tier.storageLimit)} GB</p>
                   <p>Bandwidth: {formatBytesToGB(tier.bandwidthLimit)} GB</p>
                   <p>Price: {formatWeiToETH(tier.price)} ETH/month</p>
                 </div>
-                <div className="card-actions justify-end">
+                <div className="card-actions justify-end mt-4">
                   <button
-                    className="btn w-full bg-gray-600 text-gray-300 border-none hover:bg-gray-500 transition-all duration-300"
+                    className="btn w-full bg-blue-600 text-white border-none hover:bg-blue-700 transition-all duration-300"
                     onClick={() => setSelectedTier(index)}
                     disabled={selectedTier === index}
                     aria-label={`Select Tier ${index}`}
@@ -281,14 +283,15 @@ export const Subscription = () => {
 
       {/* Duration Input and Purchase Button */}
       {allTiers.length > 0 && connectedAddress && (
-        <div className="flex flex-col gap-4 mt-4">
-          <div className="form-control">
+        <div className="flex flex-col gap-4 mt-6 p-6 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+          <h3 className="text-xl font-semibold text-white">Select Duration and Purchase</h3>
+          <div className="form-control w-full">
             <label className="label">
-              <span className="label-text">Duration (days)</span>
+              <span className="label-text text-gray-300">Duration (days)</span>
             </label>
             <input
               type="number"
-              className="input input-bordered"
+              className="input input-bordered w-full bg-slate-700/50 border-slate-600/50 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-all duration-300"
               value={duration}
               onChange={e => setDuration(Math.max(30, Number(e.target.value)))}
               min="30"
@@ -297,22 +300,32 @@ export const Subscription = () => {
             />
           </div>
 
-          <button className="btn btn-primary" onClick={handlePurchase} disabled={isPurchasing || !connectedAddress}>
+          {allTiers[selectedTier] && (
+            <div className="text-gray-300 space-y-1">
+              <p>
+                Total Cost:{" "}
+                <span className="font-semibold text-white">
+                  {formatWeiToETH(allTiers[selectedTier].price * BigInt(Math.ceil(duration / 30)))} ETH
+                </span>
+              </p>
+              <p>
+                Monthly Rate:{" "}
+                <span className="font-semibold text-white">{formatWeiToETH(allTiers[selectedTier].price)} ETH</span>
+              </p>
+            </div>
+          )}
+
+          <button
+            className="btn btn-primary w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-none transition-all duration-300 transform hover:scale-105"
+            onClick={handlePurchase}
+            disabled={isPurchasing || !connectedAddress}
+          >
             {isPurchasing ? (
               <span className="loading loading-spinner loading-sm"></span>
             ) : (
               `Purchase Tier ${selectedTier} for ${duration} days`
             )}
           </button>
-
-          {allTiers[selectedTier] && (
-            <div className="alert alert-info">
-              <div>
-                <p>Total Cost: {formatWeiToETH(allTiers[selectedTier].price * BigInt(Math.ceil(duration / 30)))} ETH</p>
-                <p>Monthly Rate: {formatWeiToETH(allTiers[selectedTier].price)} ETH</p>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
