@@ -1,21 +1,26 @@
-# 🏗 Scaffold-ETH 2
+# 🚀 GDrive 2.0 dApp
 
 <h4 align="center">
-  <a href="https://docs.scaffoldeth.io">Documentation</a> |
-  <a href="https://scaffoldeth.io">Website</a>
+  Built on <a href="https://scaffoldeth.io">🏗 Scaffold-ETH 2</a>
 </h4>
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+☁️ A decentralized cloud storage application (dapp) built on the Ethereum blockchain, leveraging the power of Scaffold-ETH 2. GDrive 2.0 allows users to store and manage files on a decentralized network, with features including:
 
-⚙️ Built using NextJS, RainbowKit, Hardhat, Wagmi, Viem, and Typescript.
+- **Decentralized File Storage**: Securely upload and store files on a decentralized network (like IPFS, although specifics can be added if needed).
+- **File Management**: View, download, share, and delete your uploaded files.
+- **Folder Organization**: (If implemented) Organize your files into folders.
+- **Subscription Tiers**: Manage storage and bandwidth limits through a subscription system.
+- **Shared Links**: (If implemented) Create and manage paid or public links to your files.
 
+This dApp is built using Scaffold-ETH 2's robust toolkit, utilizing NextJS, RainbowKit, Hardhat, Wagmi, Viem, and Typescript.
+
+Features inherited from Scaffold-ETH 2:
 - ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
 - 🪝 **[Custom hooks](https://docs.scaffoldeth.io/hooks/)**: Collection of React hooks wrapper around [wagmi](https://wagmi.sh/) to simplify interactions with smart contracts with typescript autocompletion.
 - 🧱 [**Components**](https://docs.scaffoldeth.io/components/): Collection of common web3 components to quickly build your frontend.
 - 🔥 **Burner Wallet & Local Faucet**: Quickly test your application with a burner wallet and local faucet.
 - 🔐 **Integration with Wallet Providers**: Connect to different wallet providers and interact with the Ethereum network.
 
-![Debug Contracts tab](https://github.com/scaffold-eth/scaffold-eth-2/assets/55535804/b237af0c-5027-4849-a5c1-2e31495cccb1)
 
 ## Requirements
 
@@ -27,54 +32,49 @@ Before you begin, you need to install the following tools:
 
 ## Quickstart
 
-To get started with Scaffold-ETH 2, follow the steps below:
+To get started with GDrive 2.0, follow the steps below:
 
 1. Install dependencies if it was skipped in CLI:
 
-```
-cd my-dapp-example
+```bash
 yarn install
 ```
 
 2. Run a local network in the first terminal:
 
-```
+```bash
 yarn chain
 ```
 
 This command starts a local Ethereum network using Hardhat. The network runs on your local machine and can be used for testing and development. You can customize the network configuration in `packages/hardhat/hardhat.config.ts`.
 
-3. On a second terminal, deploy the test contract:
+3. On a second terminal, deploy the GDrive contract:
 
-```
+```bash
 yarn deploy
 ```
 
-This command deploys a test smart contract to the local network. The contract is located in `packages/hardhat/contracts` and can be modified to suit your needs. The `yarn deploy` command uses the deploy script located in `packages/hardhat/deploy` to deploy the contract to the network. You can also customize the deploy script.
+This command deploys your smart contracts (including the `GDrive` contract) to the local network. The contracts are located in `packages/hardhat/contracts` and can be modified to suit your needs. The `yarn deploy` command uses the deploy script located in `packages/hardhat/deploy` to deploy the contract to the network. You can also customize the deploy script.
 
 4. On a third terminal, start your NextJS app:
 
-```
+```bash
 yarn start
 ```
 
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
+Visit your app on: `http://localhost:3000`. You can interact with your smart contracts using the application UI. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
 
 Run smart contract test with `yarn hardhat:test`
 
 - Edit your smart contracts in `packages/hardhat/contracts`
-- Edit your frontend homepage at `packages/nextjs/app/page.tsx`. For guidance on [routing](https://nextjs.org/docs/app/building-your-application/routing/defining-routes) and configuring [pages/layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts) checkout the Next.js documentation.
+- Edit your frontend pages and components in `packages/nextjs/app` and `packages/nextjs/components`.
 - Edit your deployment scripts in `packages/hardhat/deploy`
 
 
 ## Documentation
 
-Visit our [docs](https://docs.scaffoldeth.io) to learn how to start building with Scaffold-ETH 2.
+Refer to the [Scaffold-ETH 2 docs](https://docs.scaffoldeth.io) to learn more about the framework.
 
-To know more about its features, check out our [website](https://scaffoldeth.io).
+## Contributing to GDrive 2.0
 
-## Contributing to Scaffold-ETH 2
-
-We welcome contributions to Scaffold-ETH 2!
-
-Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+We welcome contributions to GDrive 2.0! Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for general contribution guidelines inherited from Scaffold-ETH 2. Specific contribution guidelines for GDrive 2.0 can be added here if needed.
