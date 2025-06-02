@@ -32,6 +32,11 @@ interface PinataFile {
   size: number;
 }
 
+interface FileUploadProps {
+  onUploadSuccess?: () => void;
+  onFileListUpdate?: (files: PinataFile[]) => void;
+}
+
 interface GDriveManagerProps {
   refreshTrigger: number;
 }
@@ -225,14 +230,15 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         ],
       });
 
-      notification.success(`Folder "${folderName}" created successfully!`);
+      notification.success("Folder created!");
       setIsFolderModalOpen(false);
       setFolderName("");
       setParentFolderId("");
       setFolderIsPublic(true);
+      fetchFiles();
     } catch (error: any) {
       console.error("Error creating folder:", error);
-      notification.error(`Failed to create folder: ${error.message}`);
+      notification.error("Failed to create folder");
     }
   };
 
@@ -1080,6 +1086,17 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+export const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, onFileListUpdate }) => {
+  // You should implement the file upload UI and logic here.
+  // This is a temporary placeholder to resolve type errors.
+  return (
+    <div>
+      <h3>File Upload Component Placeholder</h3>
+      <p>Implement file selection, Pinata upload, and contract interaction here.</p>
     </div>
   );
 };
