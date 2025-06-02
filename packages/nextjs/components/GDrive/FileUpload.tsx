@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { ethers } from "ethers";
 import FormData from "form-data";
+import { FaFileUpload } from "react-icons/fa";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth/useScaffoldWriteContract";
@@ -165,42 +166,76 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-base-200 rounded-lg">
-      <h2 className="text-xl font-bold">Upload File</h2>
-      <select
-        className="select select-bordered"
-        value={paymentMethod}
-        onChange={e => setPaymentMethod(e.target.value as "eth" | "gdv" | "token")}
-      >
-        <option value="eth">ETH</option>
-        <option value="gdv">GDV Token</option>
-        <option value="token">Other Token</option>
-      </select>
+    <div className="flex flex-col gap-6 p-8 bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-lg animate-fade-in">
+      <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700/50 pb-4">Upload File</h2>
+
+      {/* Payment Method */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-gray-300">Payment Method</label>
+        <select
+          className="select w-full bg-slate-700/50 border border-slate-600/50 text-white rounded-xl focus:outline-none focus:border-blue-500 transition-colors"
+          value={paymentMethod}
+          onChange={e => setPaymentMethod(e.target.value as "eth" | "gdv" | "token")}
+        >
+          <option value="eth">ETH</option>
+          <option value="gdv">GDV Token</option>
+          <option value="token">Other Token</option>
+        </select>
+      </div>
+
+      {/* Token Address Input (Conditional) */}
       {paymentMethod === "token" && (
-        <input
-          type="text"
-          placeholder="Token Address"
-          className="input input-bordered"
-          value={selectedToken}
-          onChange={e => setSelectedToken(e.target.value)}
-        />
-      )}
-      <input
-        type="file"
-        onChange={handleFileChange}
-        className="file-input file-input-bordered w-full"
-        disabled={uploading}
-      />
-      {file && (
-        <div className="text-sm">
-          <p>Name: {file.name}</p>
-          <p>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-          <p>Type: {file.type}</p>
+        <div className="flex flex-col gap-2 animate-fade-in">
+          <label className="text-sm font-medium text-gray-300">Token Address</label>
+          <input
+            type="text"
+            placeholder="Enter Token Address"
+            className="input w-full bg-slate-700/50 border border-slate-600/50 text-white rounded-xl placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+            value={selectedToken}
+            onChange={e => setSelectedToken(e.target.value)}
+          />
         </div>
       )}
+
+      {/* File Input */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-gray-300">Select File</label>
+        <label className="flex items-center justify-center w-full px-4 py-8 bg-slate-700/50 border border-slate-600/50 rounded-xl cursor-pointer transition-colors hover:bg-slate-700/70">
+          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <FaFileUpload className="text-3xl text-gray-400 mb-3" />
+            {file ? (
+              <p className="text-white text-sm font-semibold">
+                File Selected: <span className="text-blue-400">{file.name}</span>
+              </p>
+            ) : (
+              <p className="mb-2 text-sm text-gray-400">
+                Drag and drop or <span className="font-semibold text-blue-400">choose a file</span>
+              </p>
+            )}
+            <input type="file" className="hidden" onChange={handleFileChange} disabled={uploading} />
+          </div>
+        </label>
+      </div>
+
+      {/* File Info */}
+      {file && (
+        <div className="bg-slate-700/50 rounded-xl p-4 text-sm space-y-2 animate-fade-in">
+          <p>
+            <strong className="text-gray-300">Name:</strong> <span className="text-white">{file.name}</span>
+          </p>
+          <p>
+            <strong className="text-gray-300">Size:</strong>{" "}
+            <span className="text-white">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+          </p>
+          <p>
+            <strong className="text-gray-300">Type:</strong> <span className="text-white">{file.type || "N/A"}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Upload Button */}
       <button
-        className="btn btn-primary tooltip"
-        data-tip="Upload files to IPFS and store metadata on-chain"
+        className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleUpload}
         disabled={!file || uploading || isUploading}
       >
