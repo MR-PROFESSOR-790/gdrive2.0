@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PinataFileList from "./_components/PinataFileList";
 import {
   FaBars,
   FaCloud,
@@ -54,7 +55,7 @@ const Dashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch user stats for sidebar
   const { data: userStats } = useScaffoldReadContract({
@@ -62,68 +63,6 @@ const Dashboard = () => {
     functionName: "getUserStats",
     args: [connectedAddress],
   });
-
-  // Fetch user files with loading state
-  useEffect(() => {
-    const fetchFiles = async () => {
-      if (!connectedAddress) return;
-      setIsLoading(true);
-
-      // Simulate loading delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const mockFiles: FileData[] = [
-        {
-          id: "1",
-          name: "Capture.PNG",
-          type: "image/png",
-          size: 1024000,
-          uploadDate: Date.now() / 1000,
-          isPublic: true,
-          cid: "Qm1",
-        },
-        {
-          id: "2",
-          name: "encoder.py",
-          type: "text/x-python",
-          size: 512000,
-          uploadDate: Date.now() / 1000,
-          isPublic: false,
-          cid: "Qm2",
-        },
-        {
-          id: "3",
-          name: "adaptive_attack.py",
-          type: "text/x-python",
-          size: 768000,
-          uploadDate: Date.now() / 1000,
-          isPublic: true,
-          cid: "Qm3",
-        },
-        {
-          id: "4",
-          name: "presentation.pdf",
-          type: "application/pdf",
-          size: 2048000,
-          uploadDate: Date.now() / 1000,
-          isPublic: false,
-          cid: "Qm4",
-        },
-        {
-          id: "5",
-          name: "demo_video.mp4",
-          type: "video/mp4",
-          size: 15728640,
-          uploadDate: Date.now() / 1000,
-          isPublic: true,
-          cid: "Qm5",
-        },
-      ];
-      setFiles(mockFiles);
-      setIsLoading(false);
-    };
-    fetchFiles();
-  }, [connectedAddress]);
 
   const handleDownload = (cid: string) => {
     window.open(`https://ipfs.io/ipfs/${cid}`, "_blank");

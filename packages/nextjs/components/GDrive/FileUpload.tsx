@@ -4,7 +4,6 @@ import { ethers } from "ethers";
 import FormData from "form-data";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
-import { PINATA_CONFIG } from "~~/config/pinata";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth/useScaffoldWriteContract";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -47,11 +46,19 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
     const formData = new FormData();
     formData.append("file", file);
 
+    // Get API key and secret from environment variables
+    const apiKey = process.env.NEXT_PUBLIC_PINATA_API_KEY;
+    const apiSecret = process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY;
+
+    if (!apiKey || !apiSecret) {
+      throw new Error("Pinata API key or secret not configured in environment variables.");
+    }
+
     const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
-        pinata_api_key: PINATA_CONFIG.apiKey,
-        pinata_secret_api_key: PINATA_CONFIG.apiSecret,
+        pinata_api_key: apiKey,
+        pinata_secret_api_key: apiSecret,
       },
     });
 
@@ -147,7 +154,7 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
     const sizeInMB = fileSize / (1024 * 1024);
     const costPerMB = 0.001; // ETH per MB
     const monthlyRate = 0.005; // ETH per month
-    const months = storagePeriod / (30 * 24 * 60 * 60); // Convert seconds to months
+    const months = storagePeriod / (30 * 24 * 60 * 60);
 
     // Calculate costs based on file size and storage period
     const sizeCost = sizeInMB * costPerMB;
