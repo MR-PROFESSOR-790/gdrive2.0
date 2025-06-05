@@ -2,10 +2,10 @@
 
 import React, { useState } from "react";
 import GDriveManager, { FileUpload } from "./_components/GDriveManager";
+import { BiCube } from "react-icons/bi";
 import {
   FaBars,
-  FaCloud,
-  FaCube,
+  FaCubes,
   FaDollarSign,
   FaFileAlt,
   FaFileUpload,
@@ -72,7 +72,12 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="text-center space-y-6 p-8 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20">
-          <FaCloud className="text-6xl text-blue-400 mx-auto animate-bounce" />
+          <div className="w-16 h-16 mx-auto relative">
+            <div className="w-full h-full bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+              <BiCube className="text-white text-3xl transform -rotate-12" />
+              <BiCube className="text-white text-3xl absolute transform rotate-45 opacity-50" />
+            </div>
+          </div>
           <h2 className="text-2xl font-bold text-white">Connect Your Wallet</h2>
           <p className="text-gray-300">Please connect your wallet to access GDrive 2.0</p>
           <RainbowKitCustomConnectButton />
@@ -97,10 +102,14 @@ const Dashboard = () => {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <FaCloud className="text-white text-lg" />
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 rounded-xl flex items-center justify-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-black/10"></div>
+              <div className="relative z-10 flex items-center justify-center">
+                <BiCube className="text-white text-xl transform -rotate-12" />
+                <BiCube className="text-white text-xl absolute transform rotate-45 opacity-50" />
+              </div>
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
               GDrive 2.0
             </h1>
           </div>
@@ -148,7 +157,7 @@ const Dashboard = () => {
         <nav className="flex-1 space-y-2">
           {[
             { id: "files", icon: FaFileAlt, label: "My Files" },
-            { id: "gallery", icon: FaCube, label: "3D Gallery" },
+            { id: "gallery", icon: FaCubes, label: "3D Gallery" },
             { id: "subscription", icon: FaWallet, label: "Subscription" },
             { id: "shared-links", icon: FaShareAlt, label: "Shared Links" },
           ].map(item => (
