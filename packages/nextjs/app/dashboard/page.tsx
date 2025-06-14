@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import GDriveManager, { FileUpload } from "./_components/GDriveManager";
+import GDriveManager from "./_components/GDriveManager";
 import { BiCube } from "react-icons/bi";
 import {
   FaBars,
@@ -26,7 +26,6 @@ import { RainbowKitCustomConnectButton } from "~~/components/scaffold-eth/Rainbo
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
-// Interface for File Data (if needed by GDriveManager)
 interface FileData {
   id: string;
   name: string;
@@ -45,14 +44,13 @@ const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [fileListRefreshTrigger, setFileListRefreshTrigger] = useState(0);
 
-  // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [isCreateShareModalOpen, setIsCreateShareModalOpen] = useState(false);
   const [isCreatePaidShareModalOpen, setIsCreatePaidShareModalOpen] = useState(false);
   const [isAccessShareModalOpen, setIsAccessShareModalOpen] = useState(false);
+  const [isAccessPaidShareModalOpen, setIsAccessPaidShareModalOpen] = useState(false);
 
-  // Fetch user stats for sidebar
   const { data: userStats } = useScaffoldReadContract({
     contractName: "GDrive",
     functionName: "getUserStats",
@@ -60,7 +58,7 @@ const Dashboard = () => {
   });
 
   const triggerFileListRefresh = () => {
-    setFileListRefreshTrigger(prev => prev + 1);
+    setFileListRefreshTrigger((prev) => prev + 1);
   };
 
   const getStoragePercentage = () => {
@@ -88,13 +86,11 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-gray-100 flex overflow-hidden">
-      {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 transform ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -160,7 +156,7 @@ const Dashboard = () => {
             { id: "gallery", icon: FaCubes, label: "3D Gallery" },
             { id: "subscription", icon: FaWallet, label: "Subscription" },
             { id: "shared-links", icon: FaShareAlt, label: "Shared Links" },
-          ].map(item => (
+          ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
@@ -203,7 +199,6 @@ const Dashboard = () => {
         />
       )}
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen relative z-10">
         <header className="p-6 lg:p-8 bg-slate-900/30 backdrop-blur-sm border-b border-slate-700/50">
           <div className="flex items-center justify-between">
@@ -232,7 +227,10 @@ const Dashboard = () => {
             {activeTab === "files" && (
               <div className="flex gap-3">
                 <button
-                  onClick={() => setIsUploadModalOpen(true)}
+                  onClick={() => {
+                    setIsUploadModalOpen(true);
+                    triggerFileListRefresh(); // Pre-trigger to ensure UI is ready
+                  }}
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2"
                 >
                   <FaFileUpload />
@@ -278,7 +276,7 @@ const Dashboard = () => {
                     type="text"
                     placeholder="Search files..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-slate-800/50 backdrop-blur-sm border border-slate-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-300"
                   />
                 </div>
@@ -310,7 +308,10 @@ const Dashboard = () => {
                   </button>
                 </div>
               </div>
-              <GDriveManager refreshTrigger={fileListRefreshTrigger} />
+              <GDriveManager
+                refreshTrigger={fileListRefreshTrigger}
+                onFileUploaded={triggerFileListRefresh} // Pass callback to refresh trigger
+              />
             </div>
           )}
 
@@ -335,180 +336,6 @@ const Dashboard = () => {
           )}
         </main>
       </div>
-
-      {/* Upload Modal */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg transform animate-scale-in">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50">
-              <h3 className="text-xl font-semibold text-white">Upload File</h3>
-              <button
-                onClick={() => setIsUploadModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-300"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-6">
-              <FileUpload
-                onUploadSuccess={() => {
-                  setIsUploadModalOpen(false);
-                  triggerFileListRefresh();
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Folder Modal */}
-      {isCreateFolderModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg transform animate-scale-in">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50">
-              <h3 className="text-xl font-semibold text-white">Create Folder</h3>
-              <button
-                onClick={() => setIsCreateFolderModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-300"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-400 mb-2">Folder Name</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter folder name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 mb-2">Parent Folder ID (Optional)</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter parent folder ID"
-                  />
-                </div>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded" />
-                  <span className="text-gray-200">Public</span>
-                </label>
-                <button className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-all duration-300">
-                  Create Folder
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Share Link Modal */}
-      {isCreateShareModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg transform animate-scale-in">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50">
-              <h3 className="text-xl font-semibold text-white">Create Share Link</h3>
-              <button
-                onClick={() => setIsCreateShareModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-300"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-400 mb-2">File/Folder ID</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter file or folder ID"
-                  />
-                </div>
-                <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300">
-                  Create Share Link
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Paid Share Link Modal */}
-      {isCreatePaidShareModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg transform animate-scale-in">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50">
-              <h3 className="text-xl font-semibold text-white">Create Paid Share Link</h3>
-              <button
-                onClick={() => setIsCreatePaidShareModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-300"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-400 mb-2">File/Folder ID</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter file or folder ID"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 mb-2">Price (ETH)</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter price in ETH"
-                  />
-                </div>
-                <button className="w-full px-4 py-2 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg hover:from-yellow-700 hover:to-orange-700 transition-all duration-300">
-                  Create Paid Share Link
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Access Shared File Modal */}
-      {isAccessShareModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg transform animate-scale-in">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50">
-              <h3 className="text-xl font-semibold text-white">Access Shared File</h3>
-              <button
-                onClick={() => setIsAccessShareModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-300"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-400 mb-2">Share Link ID</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-gray-200"
-                    placeholder="Enter share link ID"
-                  />
-                </div>
-                <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300">
-                  Access File
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style jsx>{`
         @keyframes fade-in {
