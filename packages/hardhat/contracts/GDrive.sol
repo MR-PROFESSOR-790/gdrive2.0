@@ -34,7 +34,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         // Total: 32 bytes slot boundary aligned
     }
 
-    struct PaidShareLink{
+    struct PaidShareLink {
         bytes32 fileId;
         address creator;
         uint128 pricePerAccess;
@@ -148,13 +148,13 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     // Share links passwords (separate to save gas)
     mapping(bytes32 => string) public shareLinkPasswords;
-    
-    // Referral system
-    mapping(address => address) public referrers;
-    mapping(address => uint128) public referralRewards;
 
     mapping(bytes32 => PaidShareLink) public PaidShareLinks;
     mapping(address => uint128) public earnedRevenue;
+    mapping(address => address) public referrers;
+    mapping(address => uint256) public referralRewards;
+
+
     
     // Subscription tiers configuration (use arrays for gas efficiency)
     uint128[4] public tierStorageLimits;
@@ -549,6 +549,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         delete fileExpiryDates[fileId];
         emit FileDeleted(fileId);
     }
+
     function _removeFromIndexes(
         bytes32 fileId,
         string memory fileType,
@@ -590,48 +591,47 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         }
     }
 
-
     function renewFile(bytes32 fileId, uint64 additionalPeriod)
-    external payable onlyFileOwner(fileId) fileExists(fileId)
-{
-    uint256 renewalCost = _calculateStorageCost(files[fileId].size, additionalPeriod);
-    if (msg.value < renewalCost) revert InsufficientPayment();
+        external payable onlyFileOwner(fileId) fileExists(fileId)
+    {
+        uint256 renewalCost = _calculateStorageCost(files[fileId].size, additionalPeriod);
+        if (msg.value < renewalCost) revert InsufficientPayment();
 
-    unchecked {
-        fileExpiryDates[fileId] += additionalPeriod;
+        unchecked {
+            fileExpiryDates[fileId] += additionalPeriod;
+        }
+
+        filePayments[fileId] += uint128(msg.value);
     }
 
-    filePayments[fileId] += uint128(msg.value);
-}
+    function updateFileVersion(bytes32 fileId, string calldata newCID, uint128 newSize)
+        external onlyFileOwner(fileId) fileExists(fileId)
+    {
+        File storage file = files[fileId];
+        Subscription storage sub = subscriptions[msg.sender];
 
-function updateFileVersion(bytes32 fileId, string calldata newCID, uint128 newSize)
-    external onlyFileOwner(fileId) fileExists(fileId)
-{
-    File storage file = files[fileId];
-    Subscription storage sub = subscriptions[msg.sender];
+        // Check storage limit
+        if (userStorageUsed[msg.sender] + newSize - file.size > sub.storageLimit) {
+            revert StorageLimitExceeded();
+        }
 
-    // Check storage limit
-    if (userStorageUsed[msg.sender] + newSize - file.size > sub.storageLimit) {
-        revert StorageLimitExceeded();
+        // Update size and CID
+        unchecked {
+            userStorageUsed[msg.sender] += (newSize - file.size);
+            file.size = newSize;
+            file.cid = newCID;
+            ++file.version;
+        }
+
+        emit FileUpdated(fileId, file.version);
     }
 
-    // Update size and CID
-    unchecked {
-        userStorageUsed[msg.sender] += (newSize - file.size);
-        file.size = newSize;
-        file.cid = newCID;
-        ++file.version;
+    function withdrawEarnings() external {
+        uint128 amount = earnedRevenue[msg.sender];
+        require(amount > 0, "No earnings");
+        earnedRevenue[msg.sender] = 0;
+        payable(msg.sender).transfer(amount);
     }
-
-    emit FileUpdated(fileId, file.version);
-}
-
-function withdrawEarnings() external {
-    uint128 amount = earnedRevenue[msg.sender];
-    require(amount > 0, "No earnings");
-    earnedRevenue[msg.sender] = 0;
-    payable(msg.sender).transfer(amount);
-}
     
     /**
      * @dev Create a shareable link for a file
@@ -797,6 +797,49 @@ function withdrawEarnings() external {
             file.downloadCount,
             file.version
         );
+    }
+    
+    /**
+     * @dev Get user's files for dashboard display
+     */
+    function getUserFiles(address user) 
+        external 
+        view 
+        returns (
+            bytes32[] memory fileIds,
+            string[] memory names,
+            string[] memory cids,
+            uint128[] memory sizes,
+            uint64[] memory uploadDates,
+            bool[] memory isPublics,
+            string[] memory fileTypes
+        ) {
+        bytes32[] storage userFileIds = userFiles[user];
+        uint256 fileCount = userFileIds.length;
+        
+        fileIds = new bytes32[](fileCount);
+        names = new string[](fileCount);
+        cids = new string[](fileCount);
+        sizes = new uint128[](fileCount);
+        uploadDates = new uint64[](fileCount);
+        isPublics = new bool[](fileCount);
+        fileTypes = new string[](fileCount);
+
+        for (uint256 i = 0; i < fileCount; i++) {
+            bytes32 fileId = userFileIds[i];
+            File storage file = files[fileId];
+            FileMetadata storage metadata = fileMetadata[fileId];
+            
+            fileIds[i] = fileId;
+            names[i] = metadata.name;
+            cids[i] = file.cid;
+            sizes[i] = file.size;
+            uploadDates[i] = file.uploadDate;
+            isPublics[i] = file.isPublic;
+            fileTypes[i] = metadata.fileType;
+        }
+        
+        return (fileIds, names, cids, sizes, uploadDates, isPublics, fileTypes);
     }
     
     /**
