@@ -1,60 +1,51 @@
 import React, { useState } from "react";
-import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { notification } from "~~/utils/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { PinataFile } from "./types";
+import { notification } from "~~/utils/scaffold-eth";
 
 interface ShareLinkModalProps {
+  file: PinataFile;
   isOpen: boolean;
   onClose: () => void;
-  selectedFile: PinataFile | null;
-  onCreate: () => void;
 }
 
-const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ isOpen, onClose, selectedFile, onCreate }) => {
-  const [sharePassword, setSharePassword] = useState("");
-  const [shareExpiryDays, setShareExpiryDays] = useState("7");
-  const [shareMaxAccess, setShareMaxAccess] = useState("10");
+const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ file, isOpen, onClose }) => {
+  const [expiryDays, setExpiryDays] = useState("7");
+  const [maxAccess, setMaxAccess] = useState("10");
+  const [password, setPassword] = useState("");
 
-  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({
+  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({ contractName: "GDrive" });
+  const { data: fileId } = useScaffoldReadContract({
     contractName: "GDrive",
+    functionName: "getFileIdByCid",
+    args: [file.ipfs_pin_hash],
   });
 
   const handleCreateShareLink = async () => {
-    if (!selectedFile || !shareExpiryDays || !shareMaxAccess) return;
+    if (!fileId) {
+      notification.error("File ID not found. Please try again.");
+      return;
+    }
 
     try {
-      const fileId = cidToBytes32(selectedFile.ipfs_pin_hash);
-      const expiryDate = BigInt(Math.floor(Date.now() / 1000) + Number(shareExpiryDays) * 24 * 60 * 60);
-      const maxAccess = Number(shareMaxAccess);
-
-      const linkId = await writeGDrive({
+      const expiryDate = Math.floor(Date.now() / 1000) + parseInt(expiryDays) * 24 * 60 * 60;
+      const txHash = await writeGDrive({
         functionName: "createShareLink",
-        args: [fileId, expiryDate, maxAccess, sharePassword],
+        args: [
+          fileId as `0x${string}`,
+          BigInt(expiryDate),
+          parseInt(maxAccess),
+          password,
+        ],
       });
 
-      notification.success(`Share link created! Link ID: ${linkId}`);
+      notification.success("Share link created successfully!");
       onClose();
-      onCreate();
     } catch (error: any) {
       console.error("Error creating share link:", error);
       notification.error(`Failed to create share link: ${error.message}`);
     }
   };
-
-  function cidToBytes32(cid: string): `0x${string}` {
-    if (typeof Buffer === "undefined") {
-      console.error("Buffer is not available. Cannot convert CID to bytes32.");
-      return "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
-    }
-    const buffer = Buffer.from(cid);
-    let hex = buffer.toString("hex");
-    if (hex.length > 64) {
-      hex = hex.slice(0, 64);
-    } else if (hex.length < 64) {
-      hex = hex.padEnd(64, "0");
-    }
-    return `0x${hex}` as `0x${string}`;
-  }
 
   if (!isOpen) return null;
 
@@ -69,23 +60,13 @@ const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ isOpen, onClose, select
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-gray-400 mb-2">Password (Optional)</label>
-            <input
-              type="text"
-              value={sharePassword}
-              onChange={(e) => setSharePassword(e.target.value)}
-              className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
-              placeholder="Enter password for access (optional)"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-400 mb-2">Expiry (Days)</label>
+            <label className="block text-gray-400 mb-2">Expiry Days</label>
             <input
               type="number"
-              value={shareExpiryDays}
-              onChange={(e) => setShareExpiryDays(e.target.value)}
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
-              placeholder="Enter expiry in days"
+              placeholder="Enter expiry days"
               min="1"
             />
           </div>
@@ -93,16 +74,27 @@ const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ isOpen, onClose, select
             <label className="block text-gray-400 mb-2">Max Access Count</label>
             <input
               type="number"
-              value={shareMaxAccess}
-              onChange={(e) => setShareMaxAccess(e.target.value)}
+              value={maxAccess}
+              onChange={(e) => setMaxAccess(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
               placeholder="Enter max access count"
               min="1"
             />
           </div>
+          <div>
+            <label className="block text-gray-400 mb-2">Password (Optional)</label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
+              placeholder="Enter password"
+            />
+          </div>
           <button
-            className="btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white border-none hover:from-blue-700 hover:to-blue-900"
+            className="btn w-full bg-gradient-to-r from-green-600 to-green-800 text-white border-none hover:from-green-700 hover:to-green-900"
             onClick={handleCreateShareLink}
+            disabled={!fileId}
           >
             Create Share Link
           </button>
