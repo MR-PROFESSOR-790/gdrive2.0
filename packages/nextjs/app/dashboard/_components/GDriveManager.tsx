@@ -14,6 +14,7 @@ import PaidShareLinkModal from "./PaidShareLinkModal";
 import AccessShareLinkModal from "./AccessShareLinkModal";
 import AccessPaidShareLinkModal from "./AccessPaidShareLinkModal";
 import SubscriptionModal from "./SubscriptionModal";
+import CreateFolderModal from "./CreateFolderModal"; // Added import for CreateFolderModal
 
 interface GDriveManagerProps {
   refreshTrigger: number;
@@ -274,12 +275,30 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         />
       )}
 
-      {isFolderModalOpen && <CreateFolderModal onClose={() => setIsFolderModalOpen(false)} />}
+      {isFolderModalOpen && (
+        <CreateFolderModal
+          isOpen={isFolderModalOpen}
+          onClose={() => setIsFolderModalOpen(false)}
+          onCreate={(folderName) => console.log(`Folder created: ${folderName}`)}
+        />
+      )}
       {isShareModalOpen && <ShareLinkModal file={selectedFile!} onClose={() => setIsShareModalOpen(false)} />}
       {isPaidShareModalOpen && <PaidShareLinkModal file={selectedFile!} onClose={() => setIsPaidShareModalOpen(false)} />}
       {isAccessShareModalOpen && <AccessShareLinkModal onClose={() => setIsAccessShareModalOpen(false)} />}
-      {isAccessPaidShareModalOpen && <AccessPaidShareLinkModal onClose={() => setIsAccessPaidShareModalOpen(false)} />}
-      {isSubscriptionModalOpen && <SubscriptionModal onClose={() => setIsSubscriptionModalOpen(false)} />}
+      {isAccessPaidShareModalOpen && (
+        <AccessPaidShareLinkModal
+          isOpen={isAccessPaidShareModalOpen}
+          onClose={() => setIsAccessPaidShareModalOpen(false)}
+          onAccess={() => console.log("Access granted")}
+        />
+      )}
+      {isSubscriptionModalOpen && (
+        <SubscriptionModal
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => setIsSubscriptionModalOpen(false)}
+          onPurchase={() => console.log("Subscription purchased")}
+        />
+      )}
     </div>
   );
 };
