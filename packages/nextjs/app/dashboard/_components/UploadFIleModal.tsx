@@ -78,7 +78,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
     }
 
     try {
-      const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS",  formData, {
+      const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           pinata_api_key: apiKey,
