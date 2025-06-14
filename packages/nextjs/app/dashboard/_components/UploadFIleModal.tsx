@@ -6,7 +6,6 @@ import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { parseEther } from "ethers";
 import { notification } from "~~/utils/scaffold-eth";
 
-// Define types
 export interface PinataFile {
   ipfs_pin_hash: string;
   size: number;
@@ -74,7 +73,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
     const apiSecret = process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY;
 
     if (!apiKey || !apiSecret) {
-      throw new Error("Pinata API key or secret not configured in environment variables.");
+      throw new Error("Pinata API key or secret not configured.");
     }
 
     try {
@@ -119,7 +118,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
         uploadParams.storagePeriod,
       ]
     );
-    console.log(`Encoded params: ${encodedData}, CID: ${uploadParams.cid}`);
+    console.log(`Encoded params: ${encodedData}, CID: ${uploadParams.cid}, Address: ${address}`);
     return encodedData as `0x${string}`;
   };
 
@@ -132,15 +131,43 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
     const costInWei = (BigInt(sizeInMB) * storageRatePerMBPerYear * periodInYears) / BigInt(1e18);
     const minPayment = parseEther("0.0001");
     const finalCost = costInWei > minPayment ? ethers.formatEther(costInWei) : "0.0001";
-    console.log(`Storage cost: ${finalCost} ETH, Size: ${sizeInMB} MB, Period: ${storagePeriodDays} days`);
+    console.log(`Storage cost: ${finalCost} ETH, Size: ${sizeInMB} MB, Period: ${storagePeriodDays} days, Address: ${address}`);
     return finalCost;
+  };
+
+  const checkBalance = async (requiredEth: string): Promise<boolean> => {
+    if (!address) return false;
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const balance = await provider.getBalance(address);
+    const requiredWei = parseEther(requiredEth);
+    const hasEnough = balance >= requiredWei;
+    console.log(`Balance check: ${ethers.formatEther(balance)} ETH, Required: ${requiredEth} ETH, Sufficient: ${hasEnough}, Address: ${address}`);
+    return hasEnough;
+  };
+
+  const verifyCidInContract = async (cid: string): Promise<boolean> => {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const contract = new ethers.Contract(
+      "0x0e14D3b0c258ca41F17Beafaca9e3339eC61d591",
+      ["function getFileIdByCid(string memory cid) view returns (bytes32)"],
+      provider
+    );
+    try {
+      const fileId = await contract.getFileIdByCid(cid);
+      const isStored = fileId !== ethers.ZeroHash;
+      console.log(`CID verification: CID: ${cid}, FileId: ${fileId}, Stored: ${isStored}, Address: ${address}`);
+      return isStored;
+    } catch (err: any) {
+      console.error(`CID verification error: ${err.message}, CID: ${cid}, Address: ${address}`);
+      return false;
+    }
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!uploadFile || !address) {
-      notification.error("Please connect your wallet and select a file");
+      notification.error("Please connect wallet and select a file");
       return;
     }
 
@@ -166,11 +193,19 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
 
       const encodedParams = encodeParams(uploadParams);
       const storageCost = calculateStorageCost(uploadFile.size, parseInt(storagePeriodDays));
-      const valueToSend = parseEther(storageCost);
 
+      // Check balance
+      if (paymentMethod === "ETH") {
+        const hasEnough = await checkBalance(storageCost);
+        if (!hasEnough) {
+          throw new Error(`Insufficient ETH balance: need ${storageCost} ETH`);
+        }
+      }
+
+      const valueToSend = parseEther(storageCost);
       let txHash: string | undefined;
 
-      // Call contract based on payment method
+      // Call contract
       try {
         if (paymentMethod === "ETH") {
           txHash = await writeGDrive({
@@ -191,14 +226,14 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
           });
         }
       } catch (err: any) {
-        console.error(`Contract call error: ${err.message}, CID: ${cid}, Address: ${address}`);
+        console.error(`Contract call error: ${err.message}, CID: ${cid}, Address: ${address}, Revert: ${err.reason || err.data?.message || "unknown"}`);
         throw new Error(`Contract call failed: ${err.reason || err.data?.message || err.message}`);
       }
 
       if (txHash) {
-        const provider = new ethers.BrowserProvider(window.ethereum as any);
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const receipt = await provider.waitForTransaction(txHash);
-        console.log(`Transaction hash: ${txHash}, Status: ${receipt.status}, CID: ${cid}, Address: ${address}`);
+        console.log(`Transaction: Hash: ${txHash}, Status: ${receipt.status}, CID: ${cid}, Address: ${address}`);
 
         if (receipt.status === 1) {
           // Verify FileUploaded event
@@ -211,17 +246,16 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
           const fileUploadedEvent = events.find(e => e.args.cid === cid && e.args.owner.toLowerCase() === address.toLowerCase());
           if (!fileUploadedEvent) {
             console.error(`FileUploaded event not found, CID: ${cid}, Address: ${address}`);
-            throw new Error("FileUploaded event not found. CID may not be stored correctly.");
+            throw new Error("FileUploaded event not found. CID may not be stored.");
           }
           console.log(`FileUploaded event: FileId: ${fileUploadedEvent.args.fileId}, CID: ${cid}, Owner: ${fileUploadedEvent.args.owner}`);
 
           // Verify userCidToFileId
-          const fileId = await contract.getFileIdByCid(cid);
-          if (fileId === ethers.ZeroHash) {
+          const isCidStored = await verifyCidInContract(cid);
+          if (!isCidStored) {
             console.error(`userCidToFileId not set for CID: ${cid}, Address: ${address}`);
-            throw new Error("userCidToFileId not set in contract.");
+            throw new Error("CID not registered in contract. Upload failed.");
           }
-          console.log(`Verified userCidToFileId, FileId: ${fileId}, CID: ${cid}, Address: ${address}`);
 
           const finalFile: PinataFile = {
             ipfs_pin_hash: cid,
@@ -237,7 +271,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
             },
           };
 
-          notification.success("File uploaded and recorded on-chain successfully!");
+          notification.success("File uploaded and recorded on-chain!");
           if (onUploadSuccess) onUploadSuccess(finalFile);
           onClose();
         } else {
@@ -246,11 +280,11 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
         }
       }
     } catch (error: any) {
-      console.error("Upload error:", error);
+      console.error("Upload error:", error.message, { cid: uploadFile?.name, address });
       let errorMessage = error.message || "Unknown error";
       if (error.reason) errorMessage = error.reason;
       else if (error.data?.message) errorMessage = error.data.message;
-      notification.error(`Failed to upload file: ${errorMessage}`);
+      notification.error(`Upload failed: ${errorMessage}`);
     } finally {
       setLoading(false);
       setUploadProgress(100);
