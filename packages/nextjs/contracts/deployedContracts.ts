@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   11155111: {
     GDrive: {
-      address: "0x35d16FeA385eeB9a70D8eb68E7Ee7E0E8ae92015",
+      address: "0x80cAC599279d572165289846034DB85854E6c8eD",
       abi: [
         {
           inputs: [
@@ -1337,6 +1337,25 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "string",
+              name: "cid",
+              type: "string",
+            },
+          ],
+          name: "getFileIdByCid",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "bytes32",
               name: "linkId",
               type: "bytes32",
@@ -2294,6 +2313,30 @@ const deployedContracts = {
               internalType: "uint128",
               name: "",
               type: "uint128",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          name: "userCidToFileId",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
             },
           ],
           stateMutability: "view",

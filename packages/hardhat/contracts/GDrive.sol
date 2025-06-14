@@ -153,7 +153,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint128) public earnedRevenue;
     mapping(address => address) public referrers;
     mapping(address => uint256) public referralRewards;
-
+    mapping(address => mapping(string => bytes32)) public userCidToFileId;
 
     
     // Subscription tiers configuration (use arrays for gas efficiency)
@@ -321,10 +321,11 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         
         // Generate unique file ID (gas optimized)
         unchecked {
-            ++_fileIdCounter;
-        }
-        fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
-        
+        ++_fileIdCounter;
+    }
+    fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
+
+    userCidToFileId[msg.sender][cid] = fileId;
         // Create file record
         files[fileId] = File({
             cid: cid,
@@ -371,7 +372,11 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         emit FileUploaded(fileId, msg.sender, cid);
         return fileId;
     }
-
+    function getFileIdByCid(string calldata cid) external view returns (bytes32) {
+    bytes32 fileId = userCidToFileId[msg.sender][cid];
+    if (fileId == bytes32(0)) revert FileNotFound();
+    return fileId;
+}
     function uploadFile(bytes calldata params) 
         external 
         payable 
