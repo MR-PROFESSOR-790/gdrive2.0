@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FaSearch, FaPlus, FaRegFolderOpen } from "react-icons/fa";
 import { useAccount } from "wagmi";
@@ -33,6 +32,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const [sortBy, setSortBy] = useState<"name" | "date" | "size">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [cidToDelete, setCidToDelete] = useState<string | null>(null);
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -51,7 +51,16 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
     args: [address],
   });
 
-  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({ contractName: "GDrive" });
+  const { data: fileId, isLoading: isFileIdLoading, error: fileIdError } = useScaffoldReadContract({
+    contractName: "GDrive",
+    functionName: "getFileIdByCid",
+    args: [cidToDelete],
+    enabled: !!cidToDelete,
+  });
+
+  const { writeContractAsync: writeGDrive, isLoading: isWriteLoading } = useScaffoldWriteContract({
+    contractName: "GDrive",
+  });
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -94,7 +103,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           });
 
           const parsedFiles = Array.from(fileMap.values());
-          console.log(`Fetched ${parsedFiles.length} unique files`);
+          console.log(`Fetched ${parsedFiles.length} unique files for address: ${address}`);
           setFiles(parsedFiles);
         } else {
           setFiles([]);
@@ -115,6 +124,51 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
     fetchFiles();
   }, [fetchFiles, refreshTrigger]);
 
+  useEffect(() => {
+    if (cidToDelete && fileId && !isFileIdLoading && !fileIdError) {
+      if (fileId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        notification.error(`File ID not found for CID: ${cidToDelete}. Ensure the file was uploaded by ${address}.`);
+        console.error(`Zero fileId for CID: ${cidToDelete}, address: ${address}`);
+        setCidToDelete(null);
+        return;
+      }
+
+      const deleteFile = async () => {
+        try {
+          console.log(`Deleting file with CID: ${cidToDelete}, File ID: ${fileId}, Address: ${address}`);
+          await writeGDrive({
+            functionName: "deleteFile",
+            args: [fileId as `0x${string}`],
+          });
+          setFiles(prev => prev.filter(file => file.ipfs_pin_hash !== cidToDelete));
+          notification.success("File deleted successfully");
+          refetch();
+        } catch (err: any) {
+          console.error("Delete error:", err, { cid: cidToDelete, fileId, address });
+          let errorMessage = err.message || "Unknown error";
+          if (err.reason) {
+            errorMessage = err.reason;
+          } else if (err.data?.message) {
+            errorMessage = err.data.message;
+          }
+          notification.error(`Failed to delete file: ${errorMessage}`);
+        } finally {
+          setCidToDelete(null);
+        }
+      };
+
+      deleteFile();
+    } else if (cidToDelete && fileIdError) {
+      console.error("File ID fetch error:", fileIdError, { cid: cidToDelete, address });
+      let errorMessage = fileIdError.message || "Unknown error";
+      if (fileIdError.message.includes("FileNotFound")) {
+        errorMessage = `File not found for CID: ${cidToDelete}. Ensure it was uploaded by ${address}.`;
+      }
+      notification.error(`Failed to fetch file ID: ${errorMessage}`);
+      setCidToDelete(null);
+    }
+  }, [cidToDelete, fileId, isFileIdLoading, fileIdError, writeGDrive, refetch, address]);
+
   const handleCopyLink = useCallback(async (text: string, cid: string) => {
     if (!text) {
       console.error("Empty text provided for copying", { cid });
@@ -131,44 +185,23 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
       } else {
         console.warn("Clipboard API not available, using textbox fallback", { cid });
         notification.info("Please copy the link from the textbox");
-        setCopiedCid(cid); // Trigger textbox display in FileCard
+        setCopiedCid(cid);
         setTimeout(() => setCopiedCid(null), 5000);
       }
     } catch (err: any) {
       console.error("Failed to copy link:", err, { text, cid });
       notification.error(`Failed to copy link: ${err.message || "Clipboard not supported"}`);
-      setCopiedCid(cid); // Trigger textbox fallback
+      setCopiedCid(cid);
       setTimeout(() => setCopiedCid(null), 5000);
     }
   }, []);
 
   const handleDelete = useCallback(
-    async (cid: string) => {
-      try {
-        const { data: fileId } = await useScaffoldReadContract({
-          contractName: "GDrive",
-          functionName: "getFileIdByCid",
-          args: [cid],
-        });
-
-        if (!fileId) {
-          throw new Error("File ID not found for CID: " + cid);
-        }
-
-        await writeGDrive({
-          functionName: "deleteFile",
-          args: [fileId as `0x${string}`],
-        });
-
-        setFiles(prev => prev.filter(file => file.ipfs_pin_hash !== cid));
-        notification.success("File deleted successfully");
-        refetch();
-      } catch (err: any) {
-        console.error("Delete error:", err, { cid });
-        notification.error(`Failed to delete file: ${err.message || "Unknown error"}`);
-      }
+    (cid: string) => {
+      console.log(`Initiating deletion for CID: ${cid}, Address: ${address}`);
+      setCidToDelete(cid);
     },
-    [writeGDrive, refetch]
+    [address]
   );
 
   const handleShare = useCallback((file: PinataFile) => {
@@ -193,10 +226,11 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         }
         return [uploadedFile, ...prev];
       });
+      console.log(`File uploaded successfully: ${uploadedFile.ipfs_pin_hash}, Address: ${address}`);
       notification.success("File uploaded successfully!");
       refetch();
     },
-    [refetch]
+    [refetch, address]
   );
 
   const filteredAndSortedFiles = useMemo(() => {
