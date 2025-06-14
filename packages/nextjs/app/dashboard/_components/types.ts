@@ -1,5 +1,7 @@
 export interface PinataFile {
     ipfs_pin_hash: string;
+    size: number;
+    date_pinned: string;
     metadata?: {
       name?: string;
       keyvalues?: {
@@ -9,6 +11,4 @@ export interface PinataFile {
         fileType?: string;
       };
     };
-    date_pinned: string;
-    size: number;
   }
