@@ -14,7 +14,7 @@ import PaidShareLinkModal from "./PaidShareLinkModal";
 import AccessShareLinkModal from "./AccessShareLinkModal";
 import AccessPaidShareLinkModal from "./AccessPaidShareLinkModal";
 import SubscriptionModal from "./SubscriptionModal";
-import CreateFolderModal from "./CreateFolderModal"; // Added import for CreateFolderModal
+import CreateFolderModal from "./CreateFolderModal";
 
 interface GDriveManagerProps {
   refreshTrigger: number;
@@ -108,12 +108,20 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const handleDelete = useCallback(
     async (cid: string) => {
       try {
-        const fileId = files.find(file => file.ipfs_pin_hash === cid)?.ipfs_pin_hash;
+        // Fetch the fileId for the CID
+        const fileId = await useScaffoldReadContract({
+          contractName: "GDrive",
+          functionName: "getFileIdByCid",
+          args: [cid],
+        }).data;
+
         if (!fileId) throw new Error("File ID not found");
+
         await writeGDrive({
           functionName: "deleteFile",
-          args: [fileId],
+          args: [fileId as `0x${string}`],
         });
+
         setFiles(prev => prev.filter(file => file.ipfs_pin_hash !== cid));
         notification.success("File deleted successfully");
         refetch();
@@ -122,7 +130,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         notification.error(`Failed to delete file: ${err.message}`);
       }
     },
-    [files, writeGDrive, refetch]
+    [writeGDrive, refetch]
   );
 
   const handleShare = useCallback((file: PinataFile) => {
@@ -138,7 +146,8 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const handleUploadSuccess = useCallback((uploadedFile: PinataFile) => {
     setFiles(prev => [uploadedFile, ...prev]);
     notification.success("File uploaded successfully!");
-  }, []);
+    refetch();
+  }, [refetch]);
 
   const filteredAndSortedFiles = useMemo(() => {
     return files
@@ -263,42 +272,48 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
       )}
 
       {/* Modals */}
-      {isUploadModalOpen && (
-        <UploadFileModal
-          isOpen={isUploadModalOpen}
-          onClose={() => setIsUploadModalOpen(false)}
-          onUploadSuccess={handleUploadSuccess}
-          refetch={refetch}
-          loading={isUploading}
-          setLoading={setIsUploading}
-          setUploadProgress={setUploadProgress}
-        />
+      <UploadFileModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUploadSuccess={handleUploadSuccess}
+        loading={isUploading}
+        setLoading={setIsUploading}
+        setUploadProgress={setUploadProgress}
+      />
+      <CreateFolderModal
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+        onCreate={(folderName) => console.log(`Folder created: ${folderName}`)}
+      />
+      {selectedFile && (
+        <>
+          <ShareLinkModal
+            file={selectedFile}
+            isOpen={isShareModalOpen}
+            onClose={() => setIsShareModalOpen(false)}
+          />
+          <PaidShareLinkModal
+            file={selectedFile}
+            isOpen={isPaidShareModalOpen}
+            onClose={() => setIsPaidShareModalOpen(false)}
+          />
+        </>
       )}
-
-      {isFolderModalOpen && (
-        <CreateFolderModal
-          isOpen={isFolderModalOpen}
-          onClose={() => setIsFolderModalOpen(false)}
-          onCreate={(folderName) => console.log(`Folder created: ${folderName}`)}
-        />
-      )}
-      {isShareModalOpen && <ShareLinkModal file={selectedFile!} onClose={() => setIsShareModalOpen(false)} />}
-      {isPaidShareModalOpen && <PaidShareLinkModal file={selectedFile!} onClose={() => setIsPaidShareModalOpen(false)} />}
-      {isAccessShareModalOpen && <AccessShareLinkModal onClose={() => setIsAccessShareModalOpen(false)} />}
-      {isAccessPaidShareModalOpen && (
-        <AccessPaidShareLinkModal
-          isOpen={isAccessPaidShareModalOpen}
-          onClose={() => setIsAccessPaidShareModalOpen(false)}
-          onAccess={() => console.log("Access granted")}
-        />
-      )}
-      {isSubscriptionModalOpen && (
-        <SubscriptionModal
-          isOpen={isSubscriptionModalOpen}
-          onClose={() => setIsSubscriptionModalOpen(false)}
-          onPurchase={() => console.log("Subscription purchased")}
-        />
-      )}
+      <AccessShareLinkModal
+        isOpen={isAccessShareModalOpen}
+        onClose={() => setIsAccessShareModalOpen(false)}
+        onAccess={() => console.log("Access granted")}
+      />
+      <AccessPaidShareLinkModal
+        isOpen={isAccessPaidShareModalOpen}
+        onClose={() => setIsAccessPaidShareModalOpen(false)}
+        onAccess={() => console.log("Access granted")}
+      />
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        onPurchase={() => console.log("Subscription purchased")}
+      />
     </div>
   );
 };
