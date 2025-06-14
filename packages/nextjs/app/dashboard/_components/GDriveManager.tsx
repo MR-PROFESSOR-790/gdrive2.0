@@ -103,7 +103,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           });
 
           const parsedFiles = Array.from(fileMap.values());
-          console.log(`Fetched ${parsedFiles.length} unique files for address: ${address}`);
+          console.log(`Fetched ${parsedFiles.length} unique files for address: ${address}, CIDs: ${parsedFiles.map(f => f.ipfs_pin_hash).join(", ")}`);
           setFiles(parsedFiles);
         } else {
           setFiles([]);
@@ -127,7 +127,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   useEffect(() => {
     if (cidToDelete && fileId && !isFileIdLoading && !fileIdError) {
       if (fileId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
-        notification.error(`File ID not found for CID: ${cidToDelete}. Ensure the file was uploaded by ${address}.`);
+        notification.error(`File ID not found for CID: ${cidToDelete}. Ensure it was uploaded by ${address}.`);
         console.error(`Zero fileId for CID: ${cidToDelete}, address: ${address}`);
         setCidToDelete(null);
         return;
@@ -226,7 +226,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         }
         return [uploadedFile, ...prev];
       });
-      console.log(`File uploaded successfully: ${uploadedFile.ipfs_pin_hash}, Address: ${address}`);
+      console.log(`File uploaded successfully: ${uploadedFile.ipfs_pin_hash}, Name: ${uploadedFile.metadata.name}, Address: ${address}`);
       notification.success("File uploaded successfully!");
       refetch();
     },

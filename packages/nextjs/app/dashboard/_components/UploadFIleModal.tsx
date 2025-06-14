@@ -119,6 +119,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
         uploadParams.storagePeriod,
       ]
     );
+    console.log(`Encoded params: ${encodedData}, CID: ${uploadParams.cid}`);
     return encodedData as `0x${string}`;
   };
 
@@ -131,6 +132,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
     const costInWei = (BigInt(sizeInMB) * storageRatePerMBPerYear * periodInYears) / BigInt(1e18);
     const minPayment = parseEther("0.0001");
     const finalCost = costInWei > minPayment ? ethers.formatEther(costInWei) : "0.0001";
+    console.log(`Storage cost: ${finalCost} ETH, Size: ${sizeInMB} MB, Period: ${storagePeriodDays} days`);
     return finalCost;
   };
 
@@ -169,23 +171,28 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
       let txHash: string | undefined;
 
       // Call contract based on payment method
-      if (paymentMethod === "ETH") {
-        txHash = await writeGDrive({
-          functionName: "uploadFile",
-          args: [encodedParams],
-          value: valueToSend,
-        });
-      } else if (paymentMethod === "GDV") {
-        txHash = await writeGDrive({
-          functionName: "uploadFileWithGDV",
-          args: [encodedParams],
-        });
-      } else if (paymentMethod === "Token") {
-        if (!tokenAddress) throw new Error("Token address required");
-        txHash = await writeGDrive({
-          functionName: "uploadFileWithToken",
-          args: [encodedParams, tokenAddress],
-        });
+      try {
+        if (paymentMethod === "ETH") {
+          txHash = await writeGDrive({
+            functionName: "uploadFile",
+            args: [encodedParams],
+            value: valueToSend,
+          });
+        } else if (paymentMethod === "GDV") {
+          txHash = await writeGDrive({
+            functionName: "uploadFileWithGDV",
+            args: [encodedParams],
+          });
+        } else if (paymentMethod === "Token") {
+          if (!tokenAddress) throw new Error("Token address required");
+          txHash = await writeGDrive({
+            functionName: "uploadFileWithToken",
+            args: [encodedParams, tokenAddress],
+          });
+        }
+      } catch (err: any) {
+        console.error(`Contract call error: ${err.message}, CID: ${cid}, Address: ${address}`);
+        throw new Error(`Contract call failed: ${err.reason || err.data?.message || err.message}`);
       }
 
       if (txHash) {
@@ -203,9 +210,18 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
           const events = await contract.queryFilter(contract.filters.FileUploaded(), receipt.blockNumber);
           const fileUploadedEvent = events.find(e => e.args.cid === cid && e.args.owner.toLowerCase() === address.toLowerCase());
           if (!fileUploadedEvent) {
+            console.error(`FileUploaded event not found, CID: ${cid}, Address: ${address}`);
             throw new Error("FileUploaded event not found. CID may not be stored correctly.");
           }
           console.log(`FileUploaded event: FileId: ${fileUploadedEvent.args.fileId}, CID: ${cid}, Owner: ${fileUploadedEvent.args.owner}`);
+
+          // Verify userCidToFileId
+          const fileId = await contract.getFileIdByCid(cid);
+          if (fileId === ethers.ZeroHash) {
+            console.error(`userCidToFileId not set for CID: ${cid}, Address: ${address}`);
+            throw new Error("userCidToFileId not set in contract.");
+          }
+          console.log(`Verified userCidToFileId, FileId: ${fileId}, CID: ${cid}, Address: ${address}`);
 
           const finalFile: PinataFile = {
             ipfs_pin_hash: cid,
@@ -225,6 +241,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
           if (onUploadSuccess) onUploadSuccess(finalFile);
           onClose();
         } else {
+          console.error(`Transaction failed, txHash: ${txHash}, CID: ${cid}, Address: ${address}`);
           throw new Error("Transaction failed on-chain.");
         }
       }
