@@ -1,63 +1,54 @@
 import React, { useState } from "react";
 import { parseEther } from "viem";
-import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { notification } from "~~/utils/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { PinataFile } from "./types";
+import { notification } from "~~/utils/scaffold-eth";
 
 interface PaidShareLinkModalProps {
+  file: PinataFile;
   isOpen: boolean;
   onClose: () => void;
-  selectedFile: PinataFile | null;
-  onCreate: () => void;
 }
 
-const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ isOpen, onClose, selectedFile, onCreate }) => {
-  const [paidSharePassword, setPaidSharePassword] = useState("");
-  const [paidSharePrice, setPaidSharePrice] = useState("0.01");
-  const [paidShareExpiryDays, setPaidShareExpiryDays] = useState("7");
-  const [paidShareMaxAccess, setPaidShareMaxAccess] = useState("10");
+const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ file, isOpen, onClose }) => {
+  const [pricePerAccess, setPricePerAccess] = useState("0.01");
+  const [expiryDays, setExpiryDays] = useState("7");
+  const [maxAccess, setMaxAccess] = useState("10");
+  const [password, setPassword] = useState("");
 
-  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({
+  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({ contractName: "GDrive" });
+  const { data: fileId } = useScaffoldReadContract({
     contractName: "GDrive",
+    functionName: "getFileIdByCid",
+    args: [file.ipfs_pin_hash],
   });
 
   const handleCreatePaidShareLink = async () => {
-    if (!selectedFile || !paidSharePassword || !paidSharePrice || !paidShareExpiryDays || !paidShareMaxAccess) return;
+    if (!fileId) {
+      notification.error("File ID not found. Please try again.");
+      return;
+    }
 
     try {
-      const fileId = cidToBytes32(selectedFile.ipfs_pin_hash);
-      const pricePerAccess = parseEther(paidSharePrice);
-      const expiryDate = BigInt(Math.floor(Date.now() / 1000) + Number(paidShareExpiryDays) * 24 * 60 * 60);
-      const maxAccess = Number(paidShareMaxAccess);
-
-      const linkId = await writeGDrive({
+      const expiryDate = Math.floor(Date.now() / 1000) + parseInt(expiryDays) * 24 * 60 * 60;
+      const txHash = await writeGDrive({
         functionName: "createPaidShareLink",
-        args: [fileId, pricePerAccess, expiryDate, maxAccess, paidSharePassword],
+        args: [
+          fileId as `0x${string}`,
+          parseEther(pricePerAccess) as bigint,
+          BigInt(expiryDate),
+          parseInt(maxAccess),
+          password,
+        ],
       });
 
-      notification.success(`Paid share link created! Link ID: ${linkId}`);
+      notification.success("Paid share link created successfully!");
       onClose();
-      onCreate();
     } catch (error: any) {
       console.error("Error creating paid share link:", error);
       notification.error(`Failed to create paid share link: ${error.message}`);
     }
   };
-
-  function cidToBytes32(cid: string): `0x${string}` {
-    if (typeof Buffer === "undefined") {
-      console.error("Buffer is not available. Cannot convert CID to bytes32.");
-      return "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
-    }
-    const buffer = Buffer.from(cid);
-    let hex = buffer.toString("hex");
-    if (hex.length > 64) {
-      hex = hex.slice(0, 64);
-    } else if (hex.length < 64) {
-      hex = hex.padEnd(64, "0");
-    }
-    return `0x${hex}` as `0x${string}`;
-  }
 
   if (!isOpen) return null;
 
@@ -72,35 +63,25 @@ const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ isOpen, onClose
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-gray-400 mb-2">Password</label>
-            <input
-              type="text"
-              value={paidSharePassword}
-              onChange={(e) => setPaidSharePassword(e.target.value)}
-              className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
-              placeholder="Enter password for access"
-            />
-          </div>
-          <div>
             <label className="block text-gray-400 mb-2">Price per Access (ETH)</label>
             <input
               type="number"
-              value={paidSharePrice}
-              onChange={(e) => setPaidSharePrice(e.target.value)}
+              value={pricePerAccess}
+              onChange={(e) => setPricePerAccess(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
               placeholder="Enter price in ETH"
-              step="0.01"
+              step="0.001"
               min="0"
             />
           </div>
           <div>
-            <label className="block text-gray-400 mb-2">Expiry (Days)</label>
+            <label className="block text-gray-400 mb-2">Expiry Days</label>
             <input
               type="number"
-              value={paidShareExpiryDays}
-              onChange={(e) => setPaidShareExpiryDays(e.target.value)}
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
-              placeholder="Enter expiry in days"
+              placeholder="Enter expiry days"
               min="1"
             />
           </div>
@@ -108,16 +89,27 @@ const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ isOpen, onClose
             <label className="block text-gray-400 mb-2">Max Access Count</label>
             <input
               type="number"
-              value={paidShareMaxAccess}
-              onChange={(e) => setPaidShareMaxAccess(e.target.value)}
+              value={maxAccess}
+              onChange={(e) => setMaxAccess(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
               placeholder="Enter max access count"
               min="1"
             />
           </div>
+          <div>
+            <label className="block text-gray-400 mb-2">Password (Optional)</label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
+              placeholder="Enter password"
+            />
+          </div>
           <button
-            className="btn w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white border-none hover:from-blue-700 hover:to-blue-900"
+            className="btn w-full bg-gradient-to-r from-yellow-600 to-yellow-800 text-white border-none hover:from-yellow-700 hover:to-yellow-900"
             onClick={handleCreatePaidShareLink}
+            disabled={!fileId}
           >
             Create Paid Share Link
           </button>
