@@ -123,13 +123,22 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
     }
 
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedCid(cid);
-      notification.success("Link copied to clipboard!");
-      setTimeout(() => setCopiedCid(null), 2000);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        setCopiedCid(cid);
+        notification.success("Link copied to clipboard!");
+        setTimeout(() => setCopiedCid(null), 2000);
+      } else {
+        console.warn("Clipboard API not available, using textbox fallback", { cid });
+        notification.info("Please copy the link from the textbox");
+        setCopiedCid(cid); // Trigger textbox display in FileCard
+        setTimeout(() => setCopiedCid(null), 5000);
+      }
     } catch (err: any) {
       console.error("Failed to copy link:", err, { text, cid });
-      notification.error(`Failed to copy link: ${err.message || "Unknown error"}`);
+      notification.error(`Failed to copy link: ${err.message || "Clipboard not supported"}`);
+      setCopiedCid(cid); // Trigger textbox fallback
+      setTimeout(() => setCopiedCid(null), 5000);
     }
   }, []);
 

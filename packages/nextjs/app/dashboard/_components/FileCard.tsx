@@ -1,3 +1,4 @@
+
 import React from "react";
 import { FaEye, FaDownload, FaShareAlt, FaDollarSign, FaLink, FaTrash } from "react-icons/fa";
 import { PinataFile } from "./types";
@@ -32,7 +33,7 @@ const FileCard: React.FC<FileCardProps> = ({
   copiedCid,
   viewMode,
 }) => {
-  const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${file.ipfs_pin_hash}`; 
+  const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${file.ipfs_pin_hash}`;
   const fileSizeMB = Number(file.size) / (1024 * 1024);
   const fileType = file.metadata?.keyvalues?.fileType || "unknown";
   const fileName = file.metadata?.name || "Unnamed File";
@@ -42,12 +43,19 @@ const FileCard: React.FC<FileCardProps> = ({
   };
 
   const handleDownload = () => {
-    const link = document.createElement("a");
-    link.href = ipfsUrl;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const link = document.createElement("a");
+      link.href = ipfsUrl;
+      link.download = fileName;
+      link.setAttribute("target", "_blank"); // Ensure it opens in a new tab if needed
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      console.log("Download triggered for:", { fileName, ipfsUrl });
+    } catch (err: any) {
+      console.error("Download error:", err, { fileName, ipfsUrl });
+      notification.error(`Failed to download file: ${err.message || "Unknown error"}`);
+    }
   };
 
   return (
@@ -69,59 +77,73 @@ const FileCard: React.FC<FileCardProps> = ({
         </div>
       </div>
 
-      <div className={viewMode === "grid" ? "mt-4 flex justify-center gap-2" : "flex items-center gap-2"}>
-        <button
-          onClick={handleView}
-          className="p-2 text-gray-400 hover:text-blue-400 transition-colors rounded-full"
-          aria-label="Preview file"
-        >
-          <FaEye />
-        </button>
+      <div className={viewMode === "grid" ? "mt-4 flex flex-col items-center gap-2" : "flex items-center gap-2"}>
+        {copiedCid === file.ipfs_pin_hash && (
+          <div className="w-full mb-2">
+            <input
+              type="text"
+              value={ipfsUrl}
+              readOnly
+              className="w-full p-2 bg-gray-900/50 border border-teal-500 rounded-lg text-teal-300 text-sm"
+              onClick={e => (e.target as HTMLInputElement).select()}
+              title="Select and copy the link"
+            />
+          </div>
+        )}
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={handleView}
+            className="p-2 text-gray-400 hover:text-blue-400 transition-colors rounded-full"
+            aria-label="Preview file"
+          >
+            <FaEye />
+          </button>
 
-        <button
-          onClick={handleDownload}
-          className="p-2 text-gray-400 hover:text-green-400 transition-colors rounded-full"
-          aria-label="Download file"
-        >
-          <FaDownload />
-        </button>
+          <button
+            onClick={handleDownload}
+            className="p-2 text-gray-400 hover:text-green-400 transition-colors rounded-full"
+            aria-label="Download file"
+          >
+            <FaDownload />
+          </button>
 
-        <button
-          onClick={() => onShare(file)}
-          className="p-2 text-gray-400 hover:text-purple-400 transition-colors rounded-full"
-          aria-label="Share file"
-        >
-          <FaShareAlt />
-        </button>
+          <button
+            onClick={() => onShare(file)}
+            className="p-2 text-gray-400 hover:text-purple-400 transition-colors rounded-full"
+            aria-label="Share file"
+          >
+            <FaShareAlt />
+          </button>
 
-        <button
-          onClick={() => onPaidShare(file)}
-          className="p-2 text-gray-400 hover:text-yellow-400 transition-colors rounded-full"
-          aria-label="Share as paid"
-        >
-          <FaDollarSign />
-        </button>
+          <button
+            onClick={() => onPaidShare(file)}
+            className="p-2 text-gray-400 hover:text-yellow-400 transition-colors rounded-full"
+            aria-label="Share as paid"
+          >
+            <FaDollarSign />
+          </button>
 
-        <button
-          onClick={() => onCopy(ipfsUrl, file.ipfs_pin_hash)}
-          className="p-2 text-gray-400 hover:text-teal-400 transition-colors rounded-full relative group"
-          aria-label="Copy IPFS link"
-        >
-          <FaLink />
-          {copiedCid === file.ipfs_pin_hash && (
-            <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-teal-400 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-              Copied!
-            </span>
-          )}
-        </button>
+          <button
+            onClick={() => onCopy(ipfsUrl, file.ipfs_pin_hash)}
+            className="p-2 text-gray-400 hover:text-teal-400 transition-colors rounded-full relative group"
+            aria-label="Copy IPFS link"
+          >
+            <FaLink />
+            {copiedCid === file.ipfs_pin_hash && !navigator.clipboard && (
+              <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-teal-400 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                Select link above
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => onDelete(file.ipfs_pin_hash)}
-          className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-full"
-          aria-label="Delete file"
-        >
-          <FaTrash />
-        </button>
+          <button
+            onClick={() => onDelete(file.ipfs_pin_hash)}
+            className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-full"
+            aria-label="Delete file"
+          >
+            <FaTrash />
+          </button>
+        </div>
       </div>
     </div>
   );
