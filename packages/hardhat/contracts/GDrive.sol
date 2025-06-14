@@ -37,7 +37,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     struct PaidShareLink {
         bytes32 fileId;
         address creator;
-        uint128 pricePerAccess;
+        uint256 pricePerAccess;    // Changed to uint256 to match frontend
         uint64 expiryDate;
         uint32 accessCount;
         uint32 maxAccess;
@@ -149,13 +149,12 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     // Share links passwords (separate to save gas)
     mapping(bytes32 => string) public shareLinkPasswords;
 
-    mapping(bytes32 => PaidShareLink) public PaidShareLinks;
+    mapping(bytes32 => PaidShareLink) public paidShareLinks; // Renamed for clarity
     mapping(address => uint128) public earnedRevenue;
     mapping(address => address) public referrers;
     mapping(address => uint256) public referralRewards;
     mapping(address => mapping(string => bytes32)) public userCidToFileId;
 
-    
     // Subscription tiers configuration (use arrays for gas efficiency)
     uint128[4] public tierStorageLimits;
     uint128[4] public tierBandwidthLimits;
@@ -196,9 +195,16 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     event SubscriptionPurchased(address indexed user, uint8 tier, uint64 duration);
     event ReferralRewardPaid(address indexed referrer, uint128 amount);
 
-    event PaidShareLinkCreated(bytes32 indexed linkId, bytes32 indexed fileId, uint128 price);
-    event PaidAccessCompleted(bytes32 indexed linkId, address accessor, uint128 amount);
-    event RevenueWithdrawn(address indexed user, uint128 amount);
+    event PaidShareLinkCreated(
+        bytes32 indexed linkId,
+        bytes32 indexed fileId,
+        address indexed creator,
+        uint256 pricePerAccess,
+        uint64 expiryDate,
+        uint32 maxAccess
+    );
+    event PaidAccessCompleted(bytes32 indexed linkId, address indexed accessor, uint256 amount);
+    event RevenueWithdrawn(address indexed user, uint256 amount);
 
     // ============ GDV TOKEN INTEGRATION ============
     
@@ -213,6 +219,12 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     error GDVNotEnabled();
     error InvalidGDVDiscount();
+    
+    // ============ NEW CUSTOM ERRORS ============
+    
+    error InvalidPrice();
+    error LinkMaxAccessReached();
+    error InvalidMaxAccess();
     
     // ============ MODIFIERS (Gas Optimized) ============
     
@@ -254,7 +266,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         _;
     }
     
-    // ============ CUSTOM ERRORS (Gas Efficient) ============
+    // ============ EXISTING CUSTOM ERRORS ============
     
     error NotFileOwner();
     error NotFolderOwner();
@@ -320,12 +332,11 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         if (msg.value < storageCost) revert InsufficientPayment();
         
         // Generate unique file ID (gas optimized)
-        unchecked {
-        ++_fileIdCounter;
-    }
-    fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
+        unchecked { ++_fileIdCounter; }
+        fileId = keccak256(abi.encodePacked(cid, msg.sender, block.timestamp, _fileIdCounter));
 
-    userCidToFileId[msg.sender][cid] = fileId;
+        userCidToFileId[msg.sender][cid] = fileId;
+        
         // Create file record
         files[fileId] = File({
             cid: cid,
@@ -348,9 +359,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         
         // Update user data
         userFiles[msg.sender].push(fileId);
-        unchecked {
-            userStorageUsed[msg.sender] += size;
-        }
+        unchecked { userStorageUsed[msg.sender] += size; }
         
         // Add to folder if specified
         if (folderId != bytes32(0)) {
@@ -362,9 +371,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         
         // Handle payments
         filePayments[fileId] = uint128(msg.value);
-        unchecked {
-            fileExpiryDates[fileId] = uint64(block.timestamp + storagePeriod);
-        }
+        unchecked { fileExpiryDates[fileId] = uint64(block.timestamp + storagePeriod); }
         
         // Handle referral rewards
         _handleReferralReward(uint128(msg.value));
@@ -372,11 +379,19 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         emit FileUploaded(fileId, msg.sender, cid);
         return fileId;
     }
+
+    /**
+     * @dev Get file ID by CID
+     */
     function getFileIdByCid(string calldata cid) external view returns (bytes32) {
-    bytes32 fileId = userCidToFileId[msg.sender][cid];
-    if (fileId == bytes32(0)) revert FileNotFound();
-    return fileId;
-}
+        bytes32 fileId = userCidToFileId[msg.sender][cid];
+        if (fileId == bytes32(0)) revert FileNotFound();
+        return fileId;
+    }
+
+    /**
+     * @dev Upload a single file
+     */
     function uploadFile(bytes calldata params) 
         external 
         payable 
@@ -386,8 +401,15 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         return _uploadFile(params);
     }
 
-    function _batchUploadFiles(bytes[] calldata paramsArray) 
-        internal returns (bytes32[] memory fileIds) {
+    /**
+     * @dev Batch upload files
+     */
+    function batchUploadFiles(bytes[] calldata paramsArray) 
+        external 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+        returns (bytes32[] memory fileIds) {
         uint256 count = paramsArray.length;
         fileIds = new bytes32[](count);
         for (uint i = 0; i < count;) {
@@ -396,13 +418,8 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         }
     }
 
-    function batchUploadFiles(bytes[] calldata paramsArray) 
-        external payable nonReentrant whenNotPaused returns (bytes32[] memory fileIds) {
-        return _batchUploadFiles(paramsArray);
-    }
-
     /**
-     * @dev Create a new folder (gas optimized)
+     * @dev Create a new folder
      */
     function createFolder(
         string calldata name,
@@ -420,9 +437,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             }
         }
         
-        unchecked {
-            ++_folderIdCounter;
-        }
+        unchecked { ++_folderIdCounter; }
         folderId = keccak256(abi.encodePacked(name, msg.sender, block.timestamp, _folderIdCounter));
         
         folders[folderId] = Folder({
@@ -449,19 +464,24 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         return folderId;
     }
 
+    /**
+     * @dev Create a paid share link
+     */
     function createPaidShareLink(
         bytes32 fileId,
-        uint128 pricePerAccess,
+        uint256 pricePerAccess, // Changed to uint256
         uint64 expiryDate,
         uint32 maxAccess,
         string calldata password
     ) external onlyFileOwner(fileId) fileExists(fileId) returns (bytes32 linkId) {
-        if (pricePerAccess == 0 || expiryDate <= block.timestamp) revert InvalidInput();
+        if (pricePerAccess == 0) revert InvalidPrice();
+        if (expiryDate <= block.timestamp) revert InvalidInput();
+        if (maxAccess == 0) revert InvalidMaxAccess();
 
-        unchecked {++_shareLinkIdCounter;}
+        unchecked { ++_shareLinkIdCounter; }
         linkId = keccak256(abi.encodePacked(fileId, msg.sender, block.timestamp, _shareLinkIdCounter));
 
-        PaidShareLinks[linkId] = PaidShareLink({
+        paidShareLinks[linkId] = PaidShareLink({
             fileId: fileId,
             creator: msg.sender,
             pricePerAccess: pricePerAccess,
@@ -472,89 +492,138 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             isActive: true
         });
 
-        emit PaidShareLinkCreated(linkId, fileId, pricePerAccess);
+        emit PaidShareLinkCreated(linkId, fileId, msg.sender, pricePerAccess, expiryDate, maxAccess);
         return linkId;
     }
 
+    /**
+     * @dev Access a paid share link
+     */
     function accessPaidShareLink(bytes32 linkId, string calldata password)
-        external payable nonReentrant returns(string memory cid) {
-            PaidShareLink storage link = PaidShareLinks[linkId];
-            if(!link.isActive) revert LinkNotActive();
-            if(link.expiryDate <= block.timestamp) revert LinkNotActive();
-            if(link.maxAccess != 0 && link.accessCount >= link.maxAccess) revert LinkExpired();
+        external 
+        payable 
+        nonReentrant 
+        returns (string memory cid) {
+        PaidShareLink storage link = paidShareLinks[linkId];
+        if (!link.isActive) revert LinkNotActive();
+        if (link.expiryDate <= block.timestamp) revert LinkExpired();
+        if (link.maxAccess != 0 && link.accessCount >= link.maxAccess) revert LinkMaxAccessReached();
+        if (msg.value < link.pricePerAccess) revert InsufficientPayment();
 
-            if(bytes(link.password).length > 0 && keccak256(bytes(password)) != keccak256(bytes(link.password))){
-                revert InsufficientPermissions();
-            }
-
-            if(msg.value < link.pricePerAccess) revert InsufficientPayment();
-
-            File storage file = files[link.fileId];
-            cid = file.cid;
-
-            unchecked {
-                ++link.accessCount;
-                ++file.downloadCount;
-            }
-           address payable creator = payable(link.creator);
-           uint128 amount = link.pricePerAccess;
-           creator.transfer(amount);
-           earnedRevenue[creator] += amount;
-
-           emit PaidAccessCompleted(linkId, msg.sender, amount);
-           emit FileAccessed(link.fileId, msg.sender);
-
-        return cid; 
+        // Check password if required
+        if (bytes(link.password).length > 0 && keccak256(bytes(password)) != keccak256(bytes(link.password))) {
+            revert InsufficientPermissions();
         }
 
-        function deactivatePaidShareLink(bytes32 linkId) external {
-           PaidShareLink storage link = PaidShareLinks[linkId];
-           if (link.creator != msg.sender) revert NotFileOwner();
-           link.isActive = false;
+        File storage file = files[link.fileId];
+        cid = file.cid;
+
+        // Update state before external call
+        unchecked {
+            link.accessCount++;
+            file.downloadCount++;
+            earnedRevenue[link.creator] += uint128(link.pricePerAccess);
         }
 
-        function getPaidShareLink(bytes32 linkId)
-    external view returns (
-        bytes32 fileId,
-        address creator,
-        uint128 pricePerAccess,
-        uint64 expiryDate,
-        uint32 accessCount,
-        uint32 maxAccess,
-        string memory password,
-        bool isActive
-    )
-{
-    PaidShareLink storage link = PaidShareLinks[linkId];
-    return (
-        link.fileId,
-        link.creator,
-        link.pricePerAccess,
-        link.expiryDate,
-        link.accessCount,
-        link.maxAccess,
-        link.password,
-        link.isActive
-    );
-}
+        // Deactivate link if max access reached
+        if (link.maxAccess != 0 && link.accessCount >= link.maxAccess) {
+            link.isActive = false;
+        }
 
-    function deleteFile(bytes32 fileId) external onlyFileOwner(fileId) fileExists(fileId){
+        // Transfer payment after state updates
+        address payable creator = payable(link.creator);
+        creator.transfer(link.pricePerAccess);
+
+        emit PaidAccessCompleted(linkId, msg.sender, link.pricePerAccess);
+        emit FileAccessed(link.fileId, msg.sender);
+
+        return cid;
+    }
+
+    /**
+     * @dev Deactivate a paid share link
+     */
+    function deactivatePaidShareLink(bytes32 linkId) external {
+        PaidShareLink storage link = paidShareLinks[linkId];
+        if (link.creator != msg.sender) revert NotFileOwner();
+        link.isActive = false;
+    }
+
+    /**
+     * @dev Get paid share link details
+     */
+    function getPaidShareLink(bytes32 linkId)
+        external 
+        view 
+        returns (
+            bytes32 fileId,
+            address creator,
+            uint256 pricePerAccess,
+            uint64 expiryDate,
+            uint32 accessCount,
+            uint32 maxAccess,
+            string memory password,
+            bool isActive
+        )
+    {
+        PaidShareLink storage link = paidShareLinks[linkId];
+        return (
+            link.fileId,
+            link.creator,
+            link.pricePerAccess,
+            link.expiryDate,
+            link.accessCount,
+            link.maxAccess,
+            link.password,
+            link.isActive
+        );
+    }
+
+    /**
+     * @dev Delete a file
+     */
+    function deleteFile(bytes32 fileId) 
+        external 
+        onlyFileOwner(fileId) 
+        fileExists(fileId) 
+    {
         File storage file = files[fileId];
         FileMetadata storage metadata = fileMetadata[fileId];
-        _removeFromIndexes(fileId, metadata.fileType, metadata.tags, file.isPublic);
-        if (userStorageUsed[msg.sender] >= file.size){
-            userStorageUsed[msg.sender] -= file.size;
+
+        // Clear userCidToFileId
+        delete userCidToFileId[msg.sender][file.cid];
+
+        // Remove from userFiles
+        bytes32[] storage userFileList = userFiles[msg.sender];
+        for (uint i = 0; i < userFileList.length; i++) {
+            if (userFileList[i] == fileId) {
+                userFileList[i] = userFileList[userFileList.length - 1];
+                userFileList.pop();
+                break;
+            }
         }
-        else{
+
+        // Update storage used
+        if (userStorageUsed[msg.sender] >= file.size) {
+            userStorageUsed[msg.sender] -= file.size;
+        } else {
             userStorageUsed[msg.sender] = 0;
         }
 
+        // Remove from indexes
+        _removeFromIndexes(fileId, metadata.fileType, metadata.tags, file.isPublic);
+
+        // Delete file data
         delete files[fileId];
         delete fileMetadata[fileId];
         delete fileExpiryDates[fileId];
+
         emit FileDeleted(fileId);
     }
 
+    /**
+     * @dev Remove file from indexes
+     */
     function _removeFromIndexes(
         bytes32 fileId,
         string memory fileType,
@@ -596,21 +665,29 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         }
     }
 
+    /**
+     * @dev Renew file storage
+     */
     function renewFile(bytes32 fileId, uint64 additionalPeriod)
-        external payable onlyFileOwner(fileId) fileExists(fileId)
+        external 
+        payable 
+        onlyFileOwner(fileId) 
+        fileExists(fileId)
     {
         uint256 renewalCost = _calculateStorageCost(files[fileId].size, additionalPeriod);
         if (msg.value < renewalCost) revert InsufficientPayment();
 
-        unchecked {
-            fileExpiryDates[fileId] += additionalPeriod;
-        }
-
+        unchecked { fileExpiryDates[fileId] += additionalPeriod; }
         filePayments[fileId] += uint128(msg.value);
     }
 
+    /**
+     * @dev Update file version
+     */
     function updateFileVersion(bytes32 fileId, string calldata newCID, uint128 newSize)
-        external onlyFileOwner(fileId) fileExists(fileId)
+        external 
+        onlyFileOwner(fileId) 
+        fileExists(fileId)
     {
         File storage file = files[fileId];
         Subscription storage sub = subscriptions[msg.sender];
@@ -620,22 +697,30 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             revert StorageLimitExceeded();
         }
 
+        // Update userCidToFileId
+        delete userCidToFileId[msg.sender][file.cid];
+        userCidToFileId[msg.sender][newCID] = fileId;
+
         // Update size and CID
         unchecked {
             userStorageUsed[msg.sender] += (newSize - file.size);
             file.size = newSize;
             file.cid = newCID;
-            ++file.version;
+            file.version++;
         }
 
         emit FileUpdated(fileId, file.version);
     }
 
+    /**
+     * @dev Withdraw earnings
+     */
     function withdrawEarnings() external {
         uint128 amount = earnedRevenue[msg.sender];
-        require(amount > 0, "No earnings");
+        if (amount == 0) revert InvalidInput();
         earnedRevenue[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
+        emit RevenueWithdrawn(msg.sender, amount);
     }
     
     /**
@@ -646,12 +731,13 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         uint64 expiryDate,
         uint32 maxAccess,
         string calldata password
-    ) external hasFilePermission(fileId, Permission.READ) fileExists(fileId) returns (bytes32 linkId) {
+    ) external 
+        hasFilePermission(fileId, Permission.READ) 
+        fileExists(fileId) 
+        returns (bytes32 linkId) {
         if (expiryDate <= block.timestamp) revert InvalidInput();
         
-        unchecked {
-            ++_shareLinkIdCounter;
-        }
+        unchecked { ++_shareLinkIdCounter; }
         linkId = keccak256(abi.encodePacked(fileId, msg.sender, block.timestamp, _shareLinkIdCounter));
         
         shareLinks[linkId] = ShareLink({
@@ -672,7 +758,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     }
     
     /**
-     * @dev Access file through share link (gas optimized)
+     * @dev Access file through share link
      */
     function accessFileViaLink(
         bytes32 linkId,
@@ -681,7 +767,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         ShareLink storage link = shareLinks[linkId];
         if (!link.isActive) revert LinkNotActive();
         if (link.expiryDate <= block.timestamp) revert LinkExpired();
-        if (link.maxAccess != 0 && link.accessCount >= link.maxAccess) revert LinkExpired();
+        if (link.maxAccess != 0 && link.accessCount >= link.maxAccess) revert LinkMaxAccessReached();
         
         // Check password if required
         string storage storedPassword = shareLinkPasswords[linkId];
@@ -701,15 +787,13 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
             if (userBandwidthUsed[msg.sender] + file.size > sub.bandwidthLimit) {
                 revert BandwidthLimitExceeded();
             }
-            unchecked {
-                userBandwidthUsed[msg.sender] += file.size;
-            }
+            unchecked { userBandwidthUsed[msg.sender] += file.size; }
         }
         
         // Update counters
         unchecked {
-            ++link.accessCount;
-            ++file.downloadCount;
+            link.accessCount++;
+            file.downloadCount++;
         }
         
         emit FileAccessed(fileId, msg.sender);
@@ -717,7 +801,7 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     }
     
     /**
-     * @dev Purchase or upgrade subscription (gas optimized)
+     * @dev Purchase or upgrade subscription
      */
     function purchaseSubscription(
         uint8 tier,
@@ -738,13 +822,9 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         // Update subscription
         Subscription storage sub = subscriptions[msg.sender];
         if (sub.expiryDate > block.timestamp) {
-            unchecked {
-                sub.expiryDate += duration;
-            }
+            unchecked { sub.expiryDate += duration; }
         } else {
-            unchecked {
-                sub.expiryDate = uint64(block.timestamp + duration);
-            }
+            unchecked { sub.expiryDate = uint64(block.timestamp + duration); }
         }
         
         sub.user = msg.sender;
@@ -761,6 +841,45 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         _handleReferralReward(uint128(msg.value));
         
         emit SubscriptionPurchased(msg.sender, tier, duration);
+    }
+
+    /**
+     * @dev Get folder contents
+     */
+    function getFolderContents(bytes32 folderId) 
+        external 
+        view 
+        folderExists(folderId) 
+        returns (
+            bytes32[] memory subFolderIds,
+            bytes32[] memory fileIds
+        ) {
+        return (folderSubFolders[folderId], folderFiles[folderId]);
+    }
+
+    /**
+     * @dev Get paid share links for a file
+     */
+    function getPaidShareLinksForFile(bytes32 fileId) 
+        external 
+        view 
+        fileExists(fileId) 
+        returns (bytes32[] memory linkIds) {
+        // Note: This is a simplified implementation. In production, consider maintaining a mapping.
+        linkIds = new bytes32[](_shareLinkIdCounter);
+        uint256 count = 0;
+        for (uint64 i = 1; i <= _shareLinkIdCounter; i++) {
+            bytes32 linkId = keccak256(abi.encodePacked(fileId, msg.sender, block.timestamp, i));
+            if (paidShareLinks[linkId].fileId == fileId && paidShareLinks[linkId].isActive) {
+                linkIds[count] = linkId;
+                count++;
+            }
+        }
+        // Resize array
+        assembly {
+            mstore(linkIds, count)
+        }
+        return linkIds;
     }
     
     // ============ VIEW FUNCTIONS (Gas Optimized) ============
@@ -976,19 +1095,14 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         string[] memory tags, 
         bool isPublic
     ) internal {
-        // Add to file type index
         fileTypeIndex[fileType].push(fileId);
         
-        // Add to tag indexes
         uint256 tagLength = tags.length;
         for (uint256 i; i < tagLength;) {
             taggedFiles[tags[i]].push(fileId);
-            unchecked {
-                ++i;
-            }
+            unchecked { ++i; }
         }
         
-        // Add to public files if public
         if (isPublic) {
             publicFiles.push(fileId);
         }
@@ -1019,8 +1133,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Add a new supported payment token
-     * @param token Address of the ERC20 token
-     * @param price Price in wei per token
      */
     function addPaymentToken(address token, uint256 price) external onlyOwner {
         if (token == address(0)) revert InvalidInput();
@@ -1034,7 +1146,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Remove a supported payment token
-     * @param token Address of the ERC20 token
      */
     function removePaymentToken(address token) external onlyOwner {
         if (!supportedTokens[token]) revert TokenNotSupported();
@@ -1051,8 +1162,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Update token price
-     * @param token Address of the ERC20 token
-     * @param newPrice New price in wei per token
      */
     function updateTokenPrice(address token, uint256 newPrice) external onlyOwner {
         if (!supportedTokens[token]) revert TokenNotSupported();
@@ -1065,7 +1174,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Set default payment token
-     * @param token Address of the ERC20 token
      */
     function setDefaultPaymentToken(address token) external onlyOwner {
         if (token != address(0) && !supportedTokens[token]) revert TokenNotSupported();
@@ -1077,22 +1185,16 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Calculate token amount needed for payment
-     * @param ethAmount Amount in wei
-     * @param token Address of the payment token
-     * @return tokenAmount Amount of tokens needed
      */
     function calculateTokenAmount(uint256 ethAmount, address token) public view returns (uint256 tokenAmount) {
         if (!supportedTokens[token]) revert TokenNotSupported();
         
         uint256 tokenPrice = tokenPrices[token];
-        // Calculate token amount with rounding up
         tokenAmount = (ethAmount * 1e18 + tokenPrice - 1) / tokenPrice;
     }
     
     /**
      * @dev Upload file with token payment
-     * @param params Encoded parameters
-     * @param token Address of the payment token
      */
     function uploadFileWithToken(bytes calldata params, address token) 
         external 
@@ -1124,10 +1226,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Purchase subscription with token payment
-     * @param tier Subscription tier
-     * @param duration Duration in seconds
-     * @param referrer Referrer address
-     * @param token Address of the payment token
      */
     function purchaseSubscriptionWithToken(
         uint8 tier,
@@ -1171,13 +1269,9 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
         // Update subscription
         Subscription storage sub = subscriptions[msg.sender];
         if (sub.expiryDate > block.timestamp) {
-            unchecked {
-                sub.expiryDate += duration;
-            }
+            unchecked { sub.expiryDate += duration; }
         } else {
-            unchecked {
-                sub.expiryDate = uint64(block.timestamp + duration);
-            }
+            unchecked { sub.expiryDate = uint64(block.timestamp + duration); }
         }
         
         sub.user = msg.sender;
@@ -1195,8 +1289,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Withdraw tokens from contract
-     * @param token Address of the token to withdraw
-     * @param amount Amount to withdraw
      */
     function withdrawTokens(address token, uint256 amount) external onlyOwner {
         if (!supportedTokens[token]) revert TokenNotSupported();
@@ -1208,7 +1300,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Set GDV token address
-     * @param token Address of the GDV token contract
      */
     function setGDVToken(address token) external onlyOwner {
         if (token == address(0)) revert InvalidInput();
@@ -1219,7 +1310,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Enable/disable GDV payments
-     * @param enabled Whether GDV payments should be enabled
      */
     function setGDVEnabled(bool enabled) external onlyOwner {
         gdvEnabled = enabled;
@@ -1228,7 +1318,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Update GDV discount percentage
-     * @param discount New discount percentage in basis points
      */
     function updateGDVDiscount(uint256 discount) external onlyOwner {
         if (discount > BASIS_POINTS) revert InvalidGDVDiscount();
@@ -1238,8 +1327,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Calculate GDV amount needed for payment with discount
-     * @param ethAmount Amount in wei
-     * @return gdvAmount Amount of GDV tokens needed
      */
     function calculateGDVAmount(uint256 ethAmount) public view returns (uint256 gdvAmount) {
         if (!gdvEnabled) revert GDVNotEnabled();
@@ -1250,7 +1337,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Upload file with GDV payment
-     * @param params Encoded parameters
      */
     function uploadFileWithGDV(bytes calldata params) 
         external 
@@ -1282,9 +1368,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Purchase subscription with GDV payment
-     * @param tier Subscription tier
-     * @param duration Duration in seconds
-     * @param referrer Referrer address
      */
     function purchaseSubscriptionWithGDV(
         uint8 tier,
@@ -1310,7 +1393,6 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     /**
      * @dev Convert GDV tokens to ETH
-     * @param gdvAmount Amount of GDV tokens to convert
      */
     function convertGDVToEth(uint256 gdvAmount) external nonReentrant {
         if (!gdvEnabled) revert GDVNotEnabled();
@@ -1327,7 +1409,5 @@ contract GDrive is Ownable, ReentrancyGuard, Pausable {
     
     // ============ RECEIVE FUNCTION ============
     
-    receive() external payable {
-        // Allow contract to receive ETH
-    }
+    receive() external payable {}
 }

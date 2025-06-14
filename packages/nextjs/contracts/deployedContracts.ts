@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   11155111: {
     GDrive: {
-      address: "0x80cAC599279d572165289846034DB85854E6c8eD",
+      address: "0x0e14D3b0c258ca41F17Beafaca9e3339eC61d591",
       abi: [
         {
           inputs: [
@@ -82,6 +82,16 @@ const deployedContracts = {
         },
         {
           inputs: [],
+          name: "InvalidMaxAccess",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InvalidPrice",
+          type: "error",
+        },
+        {
+          inputs: [],
           name: "InvalidSubscription",
           type: "error",
         },
@@ -93,6 +103,11 @@ const deployedContracts = {
         {
           inputs: [],
           name: "LinkExpired",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "LinkMaxAccessReached",
           type: "error",
         },
         {
@@ -347,16 +362,16 @@ const deployedContracts = {
               type: "bytes32",
             },
             {
-              indexed: false,
+              indexed: true,
               internalType: "address",
               name: "accessor",
               type: "address",
             },
             {
               indexed: false,
-              internalType: "uint128",
+              internalType: "uint256",
               name: "amount",
-              type: "uint128",
+              type: "uint256",
             },
           ],
           name: "PaidAccessCompleted",
@@ -378,10 +393,28 @@ const deployedContracts = {
               type: "bytes32",
             },
             {
+              indexed: true,
+              internalType: "address",
+              name: "creator",
+              type: "address",
+            },
+            {
               indexed: false,
-              internalType: "uint128",
-              name: "price",
-              type: "uint128",
+              internalType: "uint256",
+              name: "pricePerAccess",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint64",
+              name: "expiryDate",
+              type: "uint64",
+            },
+            {
+              indexed: false,
+              internalType: "uint32",
+              name: "maxAccess",
+              type: "uint32",
             },
           ],
           name: "PaidShareLinkCreated",
@@ -430,9 +463,9 @@ const deployedContracts = {
             },
             {
               indexed: false,
-              internalType: "uint128",
+              internalType: "uint256",
               name: "amount",
-              type: "uint128",
+              type: "uint256",
             },
           ],
           name: "RevenueWithdrawn",
@@ -570,60 +603,6 @@ const deployedContracts = {
           ],
           name: "Unpaused",
           type: "event",
-        },
-        {
-          inputs: [
-            {
-              internalType: "bytes32",
-              name: "",
-              type: "bytes32",
-            },
-          ],
-          name: "PaidShareLinks",
-          outputs: [
-            {
-              internalType: "bytes32",
-              name: "fileId",
-              type: "bytes32",
-            },
-            {
-              internalType: "address",
-              name: "creator",
-              type: "address",
-            },
-            {
-              internalType: "uint128",
-              name: "pricePerAccess",
-              type: "uint128",
-            },
-            {
-              internalType: "uint64",
-              name: "expiryDate",
-              type: "uint64",
-            },
-            {
-              internalType: "uint32",
-              name: "accessCount",
-              type: "uint32",
-            },
-            {
-              internalType: "uint32",
-              name: "maxAccess",
-              type: "uint32",
-            },
-            {
-              internalType: "string",
-              name: "password",
-              type: "string",
-            },
-            {
-              internalType: "bool",
-              name: "isActive",
-              type: "bool",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
         },
         {
           inputs: [
@@ -816,9 +795,9 @@ const deployedContracts = {
               type: "bytes32",
             },
             {
-              internalType: "uint128",
+              internalType: "uint256",
               name: "pricePerAccess",
-              type: "uint128",
+              type: "uint256",
             },
             {
               internalType: "uint64",
@@ -1357,6 +1336,30 @@ const deployedContracts = {
           inputs: [
             {
               internalType: "bytes32",
+              name: "folderId",
+              type: "bytes32",
+            },
+          ],
+          name: "getFolderContents",
+          outputs: [
+            {
+              internalType: "bytes32[]",
+              name: "subFolderIds",
+              type: "bytes32[]",
+            },
+            {
+              internalType: "bytes32[]",
+              name: "fileIds",
+              type: "bytes32[]",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes32",
               name: "linkId",
               type: "bytes32",
             },
@@ -1374,9 +1377,9 @@ const deployedContracts = {
               type: "address",
             },
             {
-              internalType: "uint128",
+              internalType: "uint256",
               name: "pricePerAccess",
-              type: "uint128",
+              type: "uint256",
             },
             {
               internalType: "uint64",
@@ -1402,6 +1405,25 @@ const deployedContracts = {
               internalType: "bool",
               name: "isActive",
               type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes32",
+              name: "fileId",
+              type: "bytes32",
+            },
+          ],
+          name: "getPaidShareLinksForFile",
+          outputs: [
+            {
+              internalType: "bytes32[]",
+              name: "linkIds",
+              type: "bytes32[]",
             },
           ],
           stateMutability: "view",
@@ -1586,6 +1608,60 @@ const deployedContracts = {
               internalType: "address",
               name: "",
               type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
+            },
+          ],
+          name: "paidShareLinks",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "fileId",
+              type: "bytes32",
+            },
+            {
+              internalType: "address",
+              name: "creator",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "pricePerAccess",
+              type: "uint256",
+            },
+            {
+              internalType: "uint64",
+              name: "expiryDate",
+              type: "uint64",
+            },
+            {
+              internalType: "uint32",
+              name: "accessCount",
+              type: "uint32",
+            },
+            {
+              internalType: "uint32",
+              name: "maxAccess",
+              type: "uint32",
+            },
+            {
+              internalType: "string",
+              name: "password",
+              type: "string",
+            },
+            {
+              internalType: "bool",
+              name: "isActive",
+              type: "bool",
             },
           ],
           stateMutability: "view",
@@ -2447,7 +2523,7 @@ const deployedContracts = {
       },
     },
     GDVToken: {
-      address: "0xa078Adba3D5B184196A60724905034824cf39aeA",
+      address: "0xe013b580CFB4917BaB902A6293552F7A115D0DF1",
       abi: [
         {
           inputs: [
