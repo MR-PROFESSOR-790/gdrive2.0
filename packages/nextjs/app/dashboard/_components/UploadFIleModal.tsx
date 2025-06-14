@@ -94,6 +94,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
       if (!IpfsHash) {
         throw new Error("Pinata upload failed: Invalid CID.");
       }
+      console.log(`Pinata upload successful, CID: ${IpfsHash}, File: ${file.name}, Address: ${address}`);
       return IpfsHash;
     } catch (error: any) {
       console.error("Pinata upload error:", error.response?.data || error.message);
@@ -145,6 +146,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
     setUploadProgress(0);
 
     try {
+      // Upload to Pinata
       const cid = await uploadToPinata(uploadFile);
       const storagePeriod = parseInt(storagePeriodDays) * 24 * 60 * 60;
       const uploadParams: UploadParams = {
@@ -166,6 +168,7 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
 
       let txHash: string | undefined;
 
+      // Call contract based on payment method
       if (paymentMethod === "ETH") {
         txHash = await writeGDrive({
           functionName: "uploadFile",
@@ -188,9 +191,23 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
       if (txHash) {
         const provider = new ethers.BrowserProvider(window.ethereum as any);
         const receipt = await provider.waitForTransaction(txHash);
+        console.log(`Transaction hash: ${txHash}, Status: ${receipt.status}, CID: ${cid}, Address: ${address}`);
 
         if (receipt.status === 1) {
-          const finalFile = {
+          // Verify FileUploaded event
+          const contract = new ethers.Contract(
+            "0x0e14D3b0c258ca41F17Beafaca9e3339eC61d591",
+            ["event FileUploaded(bytes32 fileId, address indexed owner, string cid)"],
+            provider
+          );
+          const events = await contract.queryFilter(contract.filters.FileUploaded(), receipt.blockNumber);
+          const fileUploadedEvent = events.find(e => e.args.cid === cid && e.args.owner.toLowerCase() === address.toLowerCase());
+          if (!fileUploadedEvent) {
+            throw new Error("FileUploaded event not found. CID may not be stored correctly.");
+          }
+          console.log(`FileUploaded event: FileId: ${fileUploadedEvent.args.fileId}, CID: ${cid}, Owner: ${fileUploadedEvent.args.owner}`);
+
+          const finalFile: PinataFile = {
             ipfs_pin_hash: cid,
             size: uploadFile.size,
             date_pinned: new Date().toISOString(),
@@ -213,7 +230,10 @@ const UploadFileModal: React.FC<UploadFileModalProps> = ({
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      notification.error(`Failed to upload file: ${error.message || "Unknown error"}`);
+      let errorMessage = error.message || "Unknown error";
+      if (error.reason) errorMessage = error.reason;
+      else if (error.data?.message) errorMessage = error.data.message;
+      notification.error(`Failed to upload file: ${errorMessage}`);
     } finally {
       setLoading(false);
       setUploadProgress(100);
