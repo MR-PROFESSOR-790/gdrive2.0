@@ -12,6 +12,7 @@ interface AccessPaidShareLinkModalProps {
 const AccessPaidShareLinkModal: React.FC<AccessPaidShareLinkModalProps> = ({ isOpen, onClose, onAccess }) => {
   const [accessPaidShareLinkId, setAccessPaidShareLinkId] = useState("");
   const [accessPaidSharePassword, setAccessPaidSharePassword] = useState("");
+  const [price, setPrice] = useState("0.01"); // New state for price input
 
   const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({
     contractName: "GDrive",
@@ -22,7 +23,7 @@ const AccessPaidShareLinkModal: React.FC<AccessPaidShareLinkModalProps> = ({ isO
       const cid = await writeGDrive({
         functionName: "accessPaidShareLink",
         args: [accessPaidShareLinkId as `0x${string}`, accessPaidSharePassword],
-        value: parseEther("0.01"),
+        value: parseEther(price), // Use user-provided price
       });
 
       notification.success(`Paid file accessed! CID: ${cid}`);
@@ -54,6 +55,18 @@ const AccessPaidShareLinkModal: React.FC<AccessPaidShareLinkModalProps> = ({ isO
               onChange={(e) => setAccessPaidShareLinkId(e.target.value)}
               className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
               placeholder="Enter paid share link ID"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-400 mb-2">Price (ETH)</label>
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full p-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200"
+              placeholder="Enter price in ETH"
+              step="0.001"
+              min="0"
             />
           </div>
           <div>
