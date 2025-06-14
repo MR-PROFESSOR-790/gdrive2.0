@@ -1,3 +1,4 @@
+// GDriveManager.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FaSearch, FaPlus, FaRegFolderOpen, FaRegFileAlt, FaUnlock, FaLock, FaUserPlus, FaWallet } from "react-icons/fa";
 import { useAccount } from "wagmi";
@@ -60,19 +61,41 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
       if (fileData && Array.isArray(fileData) && fileData.length > 0) {
         const [fileIds, names, cids, sizes, uploadDates, isPublics, fileTypes] = fileData;
         if (Array.isArray(cids)) {
-          const parsedFiles = cids.map((cid: string, index: number) => ({
-            ipfs_pin_hash: cid,
-            size: BigInt(sizes[index]?.toString() || "0"),
-            date_pinned: new Date(Number(uploadDates[index]) * 1000).toISOString(),
-            metadata: {
-              name: names[index] || "",
-              keyvalues: {
-                isPublic: isPublics[index]?.toString() || "false",
-                fileType: fileTypes[index] || "unknown",
-                uploadedBy: address,
-              },
-            },
-          }));
+          // Create a map to deduplicate by ipfs_pin_hash
+          const fileMap = new Map<string, PinataFile>();
+
+          cids.forEach((cid: string, index: number) => {
+            const ipfsHash = cid.toString();
+            if (fileMap.has(ipfsHash)) {
+              console.warn(`Duplicate ipfs_pin_hash detected: ${ipfsHash}`, {
+                existing: fileMap.get(ipfsHash),
+                new: {
+                  index,
+                  name: names[index],
+                  size: sizes[index],
+                  date: uploadDates[index],
+                },
+              });
+            } else {
+              fileMap.set(ipfsHash, {
+                ipfs_pin_hash: ipfsHash,
+                size: Number(sizes[index]) || 0,
+                date_pinned: new Date(Number(uploadDates[index]) * 1000).toISOString(),
+                metadata: {
+                  name: names[index] || "",
+                  keyvalues: {
+                    isPublic: isPublics[index]?.toString() || "false",
+                    fileType: fileTypes[index] || "unknown",
+                    uploadedBy: address,
+                    originalSize: sizes[index]?.toString() || "0",
+                  },
+                },
+              });
+            }
+          });
+
+          const parsedFiles = Array.from(fileMap.values());
+          console.log(`Fetched ${parsedFiles.length} unique files`, parsedFiles);
           setFiles(parsedFiles);
         } else {
           setFiles([]);
@@ -108,7 +131,6 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const handleDelete = useCallback(
     async (cid: string) => {
       try {
-        // Fetch the fileId for the CID
         const fileId = await useScaffoldReadContract({
           contractName: "GDrive",
           functionName: "getFileIdByCid",
@@ -144,7 +166,15 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   }, []);
 
   const handleUploadSuccess = useCallback((uploadedFile: PinataFile) => {
-    setFiles(prev => [uploadedFile, ...prev]);
+    setFiles(prev => {
+      // Ensure no duplicate by ipfs_pin_hash
+      const existing = prev.find(f => f.ipfs_pin_hash === uploadedFile.ipfs_pin_hash);
+      if (existing) {
+        console.warn(`Duplicate file upload detected: ${uploadedFile.ipfs_pin_hash}`);
+        return prev;
+      }
+      return [uploadedFile, ...prev];
+    });
     notification.success("File uploaded successfully!");
     refetch();
   }, [refetch]);
@@ -216,16 +246,16 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           <option value="application/pdf">PDFs</option>
           <option value="text/">Documents</option>
         </select>
-        <select
+      <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as "name" | "date" | "size")}
           className="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
         >
           <option value="name">Name</option>
-          <option value="date">Date</option>
+          <option value="date">Size</option>
           <option value="size">Size</option>
         </select>
-        <select
+      <select
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
           className="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
@@ -241,7 +271,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       ) : error ? (
-        <div className="bg-red-900/30 text-red-300 p-4 rounded-lg text-center">{error}</div>
+        <div className="bg-red-900/30 text-red-400 p-4 rounded-lg text-center">{error}</div>
       ) : filteredAndSortedFiles.length === 0 ? (
         <div className="bg-gray-800/50 backdrop-blur-md p-8 rounded-xl text-center">
           <FaRegFolderOpen className="mx-auto text-gray-400 text-5xl mb-4" />
@@ -256,12 +286,12 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredAndSortedFiles.map(file => (
+          {filteredAndSortedFiles.map((file, index) => (
             <FileCard
-              key={file.ipfs_pin_hash}
+              key={`${file.ipfs_pin_hash}-${index}`} // Fallback to index to ensure unique keys
               file={file}
               onCopy={handleCopyLink}
-              onDelete={handleDelete}
+              onDelete={() => handleDelete(file.ipfs_pin_hash)}
               onShare={() => handleShare(file)}
               onPaidShare={() => handlePaidShare(file)}
               copiedCid={copiedCid}
@@ -271,7 +301,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Modal components */}
       <UploadFileModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
