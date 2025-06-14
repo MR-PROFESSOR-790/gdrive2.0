@@ -1,4 +1,3 @@
-import { parseEther } from "viem";
 import { notification } from "~~/utils/scaffold-eth";
 
 export const fetchFiles = async (uploadedBy?: string): Promise<PinataFile[]> => {
@@ -22,21 +21,6 @@ export const fetchFiles = async (uploadedBy?: string): Promise<PinataFile[]> => 
 
   const data = await response.json();
   return uploadedBy ? data.rows.filter((file: PinataFile) => file.metadata?.keyvalues?.uploadedBy === uploadedBy) : data.rows;
-};
-
-export const cidToBytes32 = (cid: string): `0x${string}` => {
-  if (typeof Buffer === "undefined") {
-    console.error("Buffer is not available. Cannot convert CID to bytes32.");
-    return "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
-  }
-  const buffer = Buffer.from(cid);
-  let hex = buffer.toString("hex");
-  if (hex.length > 64) {
-    hex = hex.slice(0, 64);
-  } else if (hex.length < 64) {
-    hex = hex.padEnd(64, "0");
-  }
-  return `0x${hex}` as `0x${string}`;
 };
 
 export const getFileIcon = (fileType: string) => {
