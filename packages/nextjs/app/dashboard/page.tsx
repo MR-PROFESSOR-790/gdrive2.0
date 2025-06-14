@@ -43,6 +43,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [fileListRefreshTrigger, setFileListRefreshTrigger] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
@@ -58,6 +59,7 @@ const Dashboard = () => {
   });
 
   const triggerFileListRefresh = () => {
+    console.log(`Triggering file list refresh, Address: ${connectedAddress}`);
     setFileListRefreshTrigger((prev) => prev + 1);
   };
 
@@ -229,7 +231,7 @@ const Dashboard = () => {
                 <button
                   onClick={() => {
                     setIsUploadModalOpen(true);
-                    triggerFileListRefresh(); // Pre-trigger to ensure UI is ready
+                    triggerFileListRefresh();
                   }}
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2"
                 >
@@ -267,6 +269,11 @@ const Dashboard = () => {
         </header>
 
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+          {error && (
+            <div className="bg-red-900/30 text-red-400 p-4 rounded-lg text-center mb-6">
+              {error}
+            </div>
+          )}
           {activeTab === "files" && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -310,7 +317,10 @@ const Dashboard = () => {
               </div>
               <GDriveManager
                 refreshTrigger={fileListRefreshTrigger}
-                onFileUploaded={triggerFileListRefresh} // Pass callback to refresh trigger
+                onFileUploaded={() => {
+                  triggerFileListRefresh();
+                  console.log("File uploaded, refreshing file list");
+                }}
               />
             </div>
           )}
