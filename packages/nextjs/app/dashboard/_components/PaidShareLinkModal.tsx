@@ -31,7 +31,7 @@ const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ file, isOpen, o
 
     try {
       const expiryDate = Math.floor(Date.now() / 1000) + parseInt(expiryDays) * 24 * 60 * 60;
-      const txHash = await writeGDrive({
+      await writeGDrive({
         functionName: "createPaidShareLink",
         args: [
           fileId as `0x${string}`,
@@ -53,7 +53,7 @@ const PaidShareLinkModal: React.FC<PaidShareLinkModalProps> = ({ file, isOpen, o
   if (!isOpen) return null;
 
   return (
-    <div className="modal modal-open animate-fade-in">
+    <div className="modal modal-open animate-modal">
       <div className="modal-box bg-gray-800/90 border border-gray-700 shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-200">Create Paid Share Link</h3>
