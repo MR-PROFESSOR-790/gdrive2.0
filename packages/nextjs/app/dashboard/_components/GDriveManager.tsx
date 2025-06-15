@@ -32,9 +32,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const [sortBy, setSortBy] = useState<"name" | "date" | "size">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [cidToDelete, setCidToDelete] = useState<string | null>(null);
-
-  // Modal states
+  const [cidToDelete, setCidToDelete] = useState<string | null>(null);  // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -45,70 +43,71 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
   const [selectedFile, setSelectedFile] = useState<PinataFile | null>(null);
 
   const { address } = useAccount();
+  
   const { data: fileData, isLoading: isFetching, refetch } = useScaffoldReadContract({
     contractName: "GDrive",
     functionName: "getUserFiles",
     args: [address],
   });
-
-  const { data: fileId, isLoading: isFileIdLoading, error: fileIdError } = useScaffoldReadContract({
+  
+  const { 
+    data: fileId, 
+    isLoading: isFileIdLoading, 
+    error: fileIdError 
+  } = useScaffoldReadContract({
     contractName: "GDrive",
     functionName: "getFileIdByCid",
     args: [cidToDelete],
     enabled: !!cidToDelete,
   });
 
-  const { writeContractAsync: writeGDrive, isLoading: isWriteLoading } = useScaffoldWriteContract({
-    contractName: "GDrive",
+  const { writeContractAsync: writeGDrive } = useScaffoldWriteContract({ 
+    contractName: "GDrive", 
   });
 
+  // Fetch files when address or refreshTrigger changes
   const fetchFiles = useCallback(async () => {
+    if (!address) {
+      setFiles([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
-
+    
     try {
-      if (!address) {
-        setFiles([]);
-        return;
-      }
-
+      // Check if fileData has valid structure
       if (fileData && Array.isArray(fileData) && fileData.length > 0) {
+        // The contract returns arrays in this order:
+        // [fileIds, names, cids, sizes, uploadDates, isPublics, fileTypes]
         const [fileIds, names, cids, sizes, uploadDates, isPublics, fileTypes] = fileData;
-        if (Array.isArray(cids)) {
-          const fileMap = new Map<string, PinataFile>();
-
-          cids.forEach((cid: string, index: number) => {
-            const ipfsHash = cid.toString();
-            if (fileMap.has(ipfsHash)) {
-              console.warn(`Duplicate ipfs_pin_hash detected: ${ipfsHash}`, {
-                existing: fileMap.get(ipfsHash),
-                new: { index, name: names[index], size: sizes[index], date: uploadDates[index] },
-              });
-            } else {
-              fileMap.set(ipfsHash, {
-                ipfs_pin_hash: ipfsHash,
-                size: Number(sizes[index]) || 0,
-                date_pinned: new Date(Number(uploadDates[index]) * 1000).toISOString(),
-                metadata: {
-                  name: names[index] || "",
-                  keyvalues: {
-                    isPublic: isPublics[index]?.toString() || "false",
-                    fileType: fileTypes[index] || "unknown",
-                    uploadedBy: address,
-                    originalSize: sizes[index]?.toString() || "0",
-                  },
-                },
-              });
-            }
-          });
-
-          const parsedFiles = Array.from(fileMap.values());
-          console.log(`Fetched ${parsedFiles.length} unique files for address: ${address}, CIDs: ${parsedFiles.map(f => f.ipfs_pin_hash).join(", ")}`);
+        
+        // Only proceed if we have valid arrays
+        if (Array.isArray(cids) && cids.length > 0) {
+          const parsedFiles = cids.map((cid: string, index: number) => ({
+            ipfs_pin_hash: cid,
+            size: Number(sizes[index]) || 0,
+            date_pinned: new Date(Number(uploadDates[index]) * 1000).toISOString(),
+            metadata: {
+              name: names[index] || "",
+              keyvalues: {
+                isPublic: isPublics[index]?.toString() || "false",
+                fileType: fileTypes[index] || "unknown",
+                uploadedBy: address,
+                originalSize: sizes[index]?.toString() || "0",
+              },
+            },
+          }));
+          
+          console.log(`Fetched ${parsedFiles.length} files for address: ${address}`);
           setFiles(parsedFiles);
         } else {
+          console.warn("Invalid or empty cids array received");
           setFiles([]);
         }
       } else {
+        console.warn("No file data available for address:", address);
         setFiles([]);
       }
     } catch (err: any) {
@@ -119,11 +118,13 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
       setLoading(false);
     }
   }, [address, fileData]);
-
+  
+  // Load files when component mounts or refreshes
   useEffect(() => {
     fetchFiles();
-  }, [fetchFiles, refreshTrigger]);
-
+  }, [fetchFiles, refreshTrigger, address]);
+  
+  // Effect for handling file deletion
   useEffect(() => {
     if (cidToDelete && fileId && !isFileIdLoading && !fileIdError) {
       if (fileId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
@@ -132,7 +133,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         setCidToDelete(null);
         return;
       }
-
+      
       const deleteFile = async () => {
         try {
           console.log(`Deleting file with CID: ${cidToDelete}, File ID: ${fileId}, Address: ${address}`);
@@ -156,26 +157,29 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           setCidToDelete(null);
         }
       };
-
+      
       deleteFile();
     } else if (cidToDelete && fileIdError) {
       console.error("File ID fetch error:", fileIdError, { cid: cidToDelete, address });
       let errorMessage = fileIdError.message || "Unknown error";
+      
       if (fileIdError.message.includes("FileNotFound")) {
         errorMessage = `File not found for CID: ${cidToDelete}. Ensure it was uploaded by ${address}.`;
       }
+      
       notification.error(`Failed to fetch file ID: ${errorMessage}`);
       setCidToDelete(null);
     }
   }, [cidToDelete, fileId, isFileIdLoading, fileIdError, writeGDrive, refetch, address]);
 
+  // Handle copy link functionality
   const handleCopyLink = useCallback(async (text: string, cid: string) => {
     if (!text) {
       console.error("Empty text provided for copying", { cid });
       notification.error("No link available to copy");
       return;
     }
-
+    
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
@@ -195,7 +199,8 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
       setTimeout(() => setCopiedCid(null), 5000);
     }
   }, []);
-
+  
+  // Handle file deletion
   const handleDelete = useCallback(
     (cid: string) => {
       console.log(`Initiating deletion for CID: ${cid}, Address: ${address}`);
@@ -203,19 +208,22 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
     },
     [address]
   );
-
+  
+  // Handle file sharing
   const handleShare = useCallback((file: PinataFile) => {
     console.log("Opening share modal for file:", file.ipfs_pin_hash);
     setSelectedFile(file);
     setIsShareModalOpen(true);
   }, []);
-
+  
+  // Handle paid file sharing
   const handlePaidShare = useCallback((file: PinataFile) => {
     console.log("Opening paid share modal for file:", file.ipfs_pin_hash);
     setSelectedFile(file);
     setIsPaidShareModalOpen(true);
   }, []);
-
+  
+  // Handle successful uploads
   const handleUploadSuccess = useCallback(
     (uploadedFile: PinataFile) => {
       setFiles(prev => {
@@ -226,6 +234,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         }
         return [uploadedFile, ...prev];
       });
+      
       console.log(`File uploaded successfully: ${uploadedFile.ipfs_pin_hash}, Name: ${uploadedFile.metadata.name}, Address: ${address}`);
       notification.success("File uploaded successfully!");
       refetch();
@@ -233,18 +242,22 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
     [refetch, address]
   );
 
+  // Filter and sort files based on UI settings
   const filteredAndSortedFiles = useMemo(() => {
     return files
       .filter(file => {
         const matchesSearch =
           file.metadata?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           file.ipfs_pin_hash.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFileType =
-          selectedFileType === "all" || file.metadata?.keyvalues?.fileType?.startsWith(selectedFileType);
+          
+        const matchesFileType = selectedFileType === "all" || 
+          file.metadata?.keyvalues?.fileType?.startsWith(selectedFileType);
+          
         return matchesSearch && matchesFileType;
       })
       .sort((a, b) => {
         let aValue: any, bValue: any;
+        
         switch (sortBy) {
           case "name":
             aValue = a.metadata?.name || "";
@@ -261,19 +274,24 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           default:
             return 0;
         }
+        
         return sortOrder === "asc" ? (aValue > bValue ? 1 : -1) : aValue < bValue ? 1 : -1;
       });
   }, [files, searchTerm, selectedFileType, sortBy, sortOrder]);
 
+  // Main render
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-white mb-6">My GDrive</h1>
-
+      
       {/* Upload Section */}
       <div className="mb-8">
-        <UploadZone onUpload={() => setIsUploadModalOpen(true)} isUploading={isUploading} />
+        <UploadZone 
+          onUpload={() => setIsUploadModalOpen(true)} 
+          isUploading={isUploading} 
+        />
       </div>
-
+      
       {/* Search & Filters */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="relative flex-1">
@@ -282,13 +300,13 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
             type="text"
             placeholder="Search files..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-4 py-2 w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
           />
         </div>
         <select
           value={selectedFileType}
-          onChange={e => setSelectedFileType(e.target.value)}
+          onChange={(e) => setSelectedFileType(e.target.value)}
           className="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
         >
           <option value="all">All Types</option>
@@ -300,7 +318,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         </select>
         <select
           value={sortBy}
-          onChange={e => setSortBy(e.target.value as "name" | "date" | "size")}
+          onChange={(e) => setSortBy(e.target.value as "name" | "date" | "size")}
           className="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
         >
           <option value="name">Name</option>
@@ -309,14 +327,14 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         </select>
         <select
           value={sortOrder}
-          onChange={e => setSortOrder(e.target.value as "asc" | "desc")}
+          onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
           className="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-300"
         >
           <option value="asc">Ascending</option>
           <option value="desc">Descending</option>
         </select>
       </div>
-
+      
       {/* File List */}
       {loading || isFetching ? (
         <div className="flex justify-center items-center h-40">
@@ -352,7 +370,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           ))}
         </div>
       )}
-
+      
       {/* Modals */}
       <UploadFileModal
         isOpen={isUploadModalOpen}
@@ -362,11 +380,13 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
         setLoading={setIsUploading}
         setUploadProgress={setUploadProgress}
       />
+      
       <CreateFolderModal
         isOpen={isFolderModalOpen}
         onClose={() => setIsFolderModalOpen(false)}
-        onCreate={folderName => console.log(`Folder created: ${folderName}`)}
+        onCreate={(folderName) => console.log(`Folder created: ${folderName}`)}
       />
+      
       {selectedFile && (
         <>
           <ShareLinkModal
@@ -377,6 +397,7 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
               setSelectedFile(null);
             }}
           />
+          
           <PaidShareLinkModal
             file={selectedFile}
             isOpen={isPaidShareModalOpen}
@@ -387,16 +408,19 @@ const GDriveManager: React.FC<GDriveManagerProps> = ({ refreshTrigger }) => {
           />
         </>
       )}
+      
       <AccessShareLinkModal
         isOpen={isAccessShareModalOpen}
         onClose={() => setIsAccessShareModalOpen(false)}
         onAccess={() => console.log("Access granted")}
       />
+      
       <AccessPaidShareLinkModal
         isOpen={isAccessPaidShareModalOpen}
         onClose={() => setIsAccessPaidShareModalOpen(false)}
-        onAccess={() => console.log("Access granted")}
+        onAccess={() => console.log("Access paid share")}
       />
+      
       <SubscriptionModal
         isOpen={isSubscriptionModalOpen}
         onClose={() => setIsSubscriptionModalOpen(false)}
